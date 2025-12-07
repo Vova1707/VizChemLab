@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+sqlalchemy
+alembic
+python-dotenv
+psycopg2
+passlib[bcrypt]
+jinja2
+python-multipart
+sqladmin
+pydantic-settings
+email-validator
+aiosmtplib
+itsdangerous
+httpx

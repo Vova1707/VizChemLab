@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Вход в систему</h1>
+<form method="post" action="/login">
+    <p>
+        <label>Email:
+            <input type="email" name="email" required autofocus>
+        </label>
+    </p>
+    <p>
+        <label>Пароль:
+            <input type="password" name="password" required>
+        </label>
+    </p>
+    <button type="submit">Войти</button>
+</form>
+<p>Нет аккаунта? <a href="/register">Зарегистрируйтесь</a></p>
+<p>
+    <a href="/forgot-password" style="color: #007bff; text-decoration: none;">Забыли пароль?</a>
+</p>
+{% endblock %}
