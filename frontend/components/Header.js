@@ -48,7 +48,7 @@ const Header = () => {
             key: 'theme',
             onClick: toggleTheme,
             style: {marginRight: '16px', outline: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 18}
-          }, theme === 'dark' ? '🌙 Тёмная' : '🌞 Светлая'),
+          }, theme === 'dark' ? 'Тёмная' : 'Светлая'),
           React.createElement('button', { key: 'logout', onClick: handleLogout }, 'Выйти')
         ] : [
           React.createElement(Link, { key: 'login', to: '/login' }, 'Вход'),

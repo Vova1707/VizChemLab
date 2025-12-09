@@ -10,7 +10,7 @@ import Profile from './pages/Profile.js';
 import ForgotPassword from './pages/ForgotPassword.js';
 import ResetPassword from './pages/ResetPassword.js';
 import Admin from './pages/Admin.js';
-import Visualizer from './pages/Visualizer.js';
+import Visualizer from './pages/Visualizer.jsx';
 import Simulator from './pages/Simulator.js';
 import Builder from './pages/Builder.js';
 import api from './services/api.js';
