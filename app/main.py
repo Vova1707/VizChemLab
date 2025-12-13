@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1.endpoints import auth, pages, visualizator
+from app.api.v1.endpoints import auth, pages, visualizator, simiulator, simiulator_visualizator
 
 from app.db.base import Base
 from app.db.session import engine
@@ -40,6 +40,8 @@ admin.add_view(UserAdmin)
 app.include_router(auth.router)
 app.include_router(pages.router)
 app.include_router(visualizator.router)
+app.include_router(simiulator.router)
+app.include_router(simiulator_visualizator.router)
 
 if __name__ == "__main__":
     import uvicorn

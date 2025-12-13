@@ -51,7 +51,7 @@ const Header = () => {
           }, theme === 'dark' ? 'Тёмная' : 'Светлая'),
           React.createElement('button', { key: 'logout', onClick: handleLogout }, 'Выйти')
         ] : [
-          React.createElement(Link, { key: 'login', to: '/login' }, 'Вход'),
+          React.createElement(Link, { key: 'login', to: '/login' }, 'Войти'),
           React.createElement(Link, { key: 'register', to: '/register', className: 'btn w-auto', style: { padding: '8px 16px', fontSize: '0.9rem' } }, 'Регистрация')
         ]
       )

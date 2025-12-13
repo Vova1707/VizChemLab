@@ -86,9 +86,16 @@ async def _get_sdf_any(compound: str) -> str | None:
 @router.post("/api/visualize")
 async def visualize_compound(compound: str = Body(..., embed=True)):
     sdf = await _get_sdf_any(compound)
-    if not sdf:
+    if not sdf or not sdf.strip():
         return JSONResponse(
             {"error": f"Не удалось получить данные из PubChem: {compound}"},
+            status_code=404,
+        )
+    
+    # Проверяем, что SDF содержит хотя бы минимальные данные
+    if len(sdf.strip()) < 50:
+        return JSONResponse(
+            {"error": f"Получены некорректные данные из PubChem: {compound}"},
             status_code=404,
         )
 

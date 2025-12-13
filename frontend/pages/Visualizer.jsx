@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Navigate } from 'react-router-dom';
-// Динамически подключаем 3Dmol.js (CDN)
+
+// Динамически подключаем 3Dmol.js (CDN) - классический вариант
 const load3Dmol = () =>
   new Promise((resolve) => {
     if (window.$3Dmol) return resolve(window.$3Dmol);
@@ -10,12 +11,14 @@ const load3Dmol = () =>
     script.onload = () => resolve(window.$3Dmol);
     document.body.appendChild(script);
   });
+
 const Visualizer = () => {
   const { user } = useAuth();
   const [molecule, setMolecule] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const viewerRef = useRef();
+  
   if (!user) return <Navigate to="/login" />;
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,6 +32,7 @@ const Visualizer = () => {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Ошибка API');
+      if (!data?.data || !data.data.trim()) throw new Error('Сервер вернул пустые данные');
       await show3DMol(data.data);
     } catch (e) {
       setError(e.message);
@@ -38,17 +42,28 @@ const Visualizer = () => {
     }
   };
   const show3DMol = async (sdf) => {
-    const $3Dmol = await load3Dmol();
-    if (viewerRef.current) viewerRef.current.innerHTML = '';
-    const element = viewerRef.current;
-    const config = { backgroundColor: '#fcfcfe' };
-    const viewer = window.$3Dmol.createViewer(element, config);
+    await load3Dmol();
+    
+    if (!viewerRef.current) {
+      throw new Error('Контейнер viewer не найден');
+    }
+    
+    // Очищаем контейнер
+    viewerRef.current.innerHTML = '';
+    
+    // Создаём viewer классическим способом
+    const viewer = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#fcfcfe' });
+    
+    // Добавляем модель из SDF
     viewer.addModel(sdf, 'sdf');
+    
+    // Устанавливаем стиль отображения
     viewer.setStyle({}, { stick: { radius: 0.3 }, sphere: { scale: 0.38 } });
+    
+    // Центрируем и рендерим
     viewer.zoomTo();
     viewer.render();
-    viewer.resize(); // гарантируем подгон ширины/высоты под контейнер
-    viewer.zoom(1.06, 600);
+    viewer.resize();
   };
   return (
     <div style={{

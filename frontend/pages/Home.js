@@ -57,22 +57,22 @@ const Home = () => {
     ),
     // Features Section
     React.createElement('div', { className: 'features-section' },
-      React.createElement('h2', { className: 'section-title' }, 'Platform Capabilities'),
+      React.createElement('h2', { className: 'section-title' }, 'Возможности платформы'),
       React.createElement('div', { className: 'features-grid' },
         React.createElement('div', { className: 'feature-card' },
           React.createElement('div', { className: 'feature-icon' }, '🧪'),
-          React.createElement('h3', null, '3D Visualization'),
-          React.createElement('p', null, 'High-performance canvas rendering of complex molecular structures.')
+          React.createElement('h3', null, '3D-визуализация'),
+          React.createElement('p', null, 'Быстрый рендер сложных молекулярных структур прямо в браузере.')
         ),
         React.createElement('div', { className: 'feature-card' },
           React.createElement('div', { className: 'feature-icon' }, '💥'),
-          React.createElement('h3', null, 'Reaction Engine'),
-          React.createElement('p', null, 'Predict outcomes based on stoichiometry and reaction conditions.')
+          React.createElement('h3', null, 'Движок реакций'),
+          React.createElement('p', null, 'Прогноз продуктов по стехиометрии и условиям реакции.')
         ),
         React.createElement('div', { className: 'feature-card' },
           React.createElement('div', { className: 'feature-icon' }, '📝'),
-          React.createElement('h3', null, 'Research Profile'),
-          React.createElement('p', null, 'Save your custom molecules and experimental data securely.')
+          React.createElement('h3', null, 'Профиль исследователя'),
+          React.createElement('p', null, 'Сохраняйте свои молекулы и экспериментальные данные в одном месте.')
         )
       )
     )
