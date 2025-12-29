@@ -51,14 +51,18 @@ const Visualizer = () => {
     // Очищаем контейнер
     viewerRef.current.innerHTML = '';
     
+    // Определяем цвет фона в зависимости от темы
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgColor = isDark ? '#0f172a' : '#f8faff';
+    
     // Создаём viewer классическим способом
-    const viewer = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#fcfcfe' });
+    const viewer = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: bgColor });
     
     // Добавляем модель из SDF
     viewer.addModel(sdf, 'sdf');
     
     // Устанавливаем стиль отображения
-    viewer.setStyle({}, { stick: { radius: 0.3 }, sphere: { scale: 0.38 } });
+    viewer.setStyle({}, { stick: { radius: 0.3, color: isDark ? '#f8f9fa' : '#4f46e5' }, sphere: { scale: 0.38 } });
     
     // Центрируем и рендерим
     viewer.zoomTo();
@@ -71,88 +75,90 @@ const Visualizer = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at 70% 40%,#eef2fc 60%,#e0e6f6 100%)'
+      padding: '20px'
     }}>
-      <div style={{
+      <div className="glass-card" style={{
         width: 820,
+        maxWidth: '100%',
         minHeight: 600,
-        background: '#fff',
-        borderRadius: 26,
-        padding: '46px 42px 26px 42px',
-        boxShadow: '0 4px 32px #b7d1f822, 0 0.5px 0.5px #c3d4ec4a'
+        borderRadius: 'var(--radius)',
+        padding: '40px',
       }}>
         <h1 style={{
-          fontSize: 31,
-          fontWeight: 700,
-          color: '#1b257a',
-          marginBottom: 12,
-          textAlign: 'center'
+          fontSize: 32,
+          fontWeight: 800,
+          color: 'var(--text-main)',
+          marginBottom: 8,
+          textAlign: 'center',
+          letterSpacing: '-0.025em'
         }}>
           3D Визуализатор молекул
         </h1>
+        <p style={{
+          color: 'var(--text-secondary)',
+          textAlign: 'center',
+          marginBottom: 32,
+          fontSize: 16
+        }}>
+          Исследуйте структуру органических и неорганических соединений
+        </p>
+
         <form onSubmit={handleSubmit}
-          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 20, gap: 13 }}>
+          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, gap: 12 }}>
           <input
             value={molecule}
             onChange={e => setMolecule(e.target.value)}
             required
+            className="form-input"
             style={{
-              padding: '12px 20px',
-              borderRadius: 10,
-              border: '1.6px solid #b9dbe8',
-              fontSize: 18,
-              background: '#fafdfe',
-              width: 265
+              padding: '14px 20px',
+              fontSize: 16,
+              width: 320,
+              margin: 0
             }}
-            placeholder="C8H10N4O2 или caffeine"
+            placeholder="Например: caffeine или C8H10N4O2"
             autoFocus
           />
           <button
             type="submit"
-            className="btn"
+            className="btn btn-sm"
             style={{
-              padding: '12px 32px',
-              fontWeight: 700,
-              fontSize: 18,
-              background: '#5285d5',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              transition: 'background 0.15s'
+              height: '50px',
+              padding: '0 32px',
+              fontSize: 16,
+              margin: 0,
+              width: 'auto'
             }}
             disabled={loading}
           >
             {loading ? 'Загрузка...' : 'Показать 3D'}
           </button>
         </form>
-        {error && <div style={{ color: '#b63a3a', fontSize: 16, textAlign: 'center', marginBottom: 6 }}>{error}</div>}
+
+        {error && <div style={{ color: 'var(--error)', fontSize: 14, textAlign: 'center', marginBottom: 16, fontWeight: 500 }}>{error}</div>}
+        
         <div
           ref={viewerRef}
+          className="canvas-container"
           style={{
-            width: 680,
-            maxWidth: '98vw',
-            height: 520,
-            margin: '0 auto 12px auto',
-            border: '1.7px solid #bdd0e8',
-            background: '#f7faff',
-            borderRadius: 16,
-            boxShadow: '0 3px 12px 0 #b3ccee2a',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            position: 'relative', // 3Dmol canvas позиционируется относительно этого блока
+            width: '100%',
+            height: 500,
+            background: 'var(--bg-body)',
+            borderRadius: 12,
+            position: 'relative',
             overflow: 'hidden'
           }}
         />
+        
         <div style={{
-          fontSize: 15,
-          color: '#8ea2ca',
+          fontSize: 14,
+          color: 'var(--text-secondary)',
           textAlign: 'center',
-          letterSpacing: '.2px',
-          marginTop: 10
+          marginTop: 24,
+          fontWeight: 500
         }}>
-          Молекула загружается из <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubChem</a>,
-          визуализатор — <a href="https://3dmol.org/" target="_blank" rel="noopener noreferrer">3Dmol.js</a>
+          Данные: <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary)'}}>PubChem</a> • 
+          Движок: <a href="https://3dmol.org/" target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary)'}}>3Dmol.js</a>
         </div>
       </div>
     </div>

@@ -18,21 +18,21 @@ const Home = () => {
         React.createElement('div', { className: 'dashboard-card' },
           React.createElement('div', { className: 'card-icon', style: { background: '#e0e7ff', color: '#4f46e5' } }, '👁️'),
           React.createElement('h3', null, 'Визуализатор молекул'),
-          React.createElement('p', null, 'Interactive 3D rendering of common chemical structures. Rotate and inspect molecular geometry.'),
+          React.createElement('p', null, 'Интерактивный 3D-рендеринг химических структур. Вращайте и изучайте геометрию молекул.'),
           React.createElement(Link, { to: '/visualizer', className: 'link-button' }, 'Открыть Визуализатор →')
         ),
         // Tool 2: Simulator
         React.createElement('div', { className: 'dashboard-card' },
           React.createElement('div', { className: 'card-icon', style: { background: '#dcfce7', color: '#16a34a' } }, '⚗️'),
           React.createElement('h3', null, 'Симулятор реакций'),
-          React.createElement('p', null, 'Simulate chemical reactions between reactants and observe product formation in real-time.'),
+          React.createElement('p', null, 'Симулируйте химические реакции и наблюдайте за образованием продуктов в реальном времени.'),
           React.createElement(Link, { to: '/simulator', className: 'link-button' }, 'Открыть Симулятор →')
         ),
         // Tool 3: Builder
         React.createElement('div', { className: 'dashboard-card' },
           React.createElement('div', { className: 'card-icon', style: { background: '#ffedd5', color: '#ea580c' } }, '🛠️'),
           React.createElement('h3', null, 'Конструктор молекул'),
-          React.createElement('p', null, 'Design your own molecules from scratch using our 2D drag-and-drop atomic builder.'),
+          React.createElement('p', null, 'Создавайте собственные молекулы с нуля, используя наш 2D-конструктор.'),
           React.createElement(Link, { to: '/builder', className: 'link-button' }, 'Открыть Конструктор →')
         )
       ),

@@ -228,10 +228,20 @@ def balance_equation(eq: str) -> str:
 
 async def _generate_reaction(reactants: str) -> str:
     prompt = (
-        f"Reactants: {reactants}\n"
-        "Write the balanced chemical equation.\n"
-        "Example: 2H2 + O2 → 2H2O\n"
-        "Answer (only equation, no text):"
+        "You are an expert organic and inorganic chemist.\n"
+        f"Request: {reactants}\n"
+        "Instructions:\n"
+        "1. Analyze the reactants and determine the most likely chemical reaction (substitution, addition, elimination, dehydration, combustion, etc.).\n"
+        "2. For organic reactions, use standard IUPAC products (e.g., ethanol dehydration -> C2H4 + H2O).\n"
+        "3. Ensure all diatomic molecules are in their natural state (O2, H2, Cl2, Br2, N2, F2, I2).\n"
+        "4. If conditions are implied (e.g., 'дегидратация'), produce the corresponding elimination products.\n"
+        "5. Output ONLY the balanced chemical equation. No explanations, no markdown.\n"
+        "Examples:\n"
+        "- C2H5OH -> C2H4 + H2O\n"
+        "- CH4 + Cl2 -> CH3Cl + HCl\n"
+        "- C4H8 + Br2 -> C4H8Br2\n"
+        "- горение водорода -> 2H2 + O2 → 2H2O\n"
+        "Balanced Equation:"
     )
     try:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -268,6 +278,31 @@ async def _generate_reaction(reactants: str) -> str:
         ) from exc
 
 
+def apply_safety_guards(raw_equation: str, input_elements: set) -> str:
+    """Применяет исправления для известных галлюцинаций модели."""
+    # 1. Защита от галлюцинации CO2 при горении водорода
+    if "H" in input_elements and "O" in input_elements and "C" not in input_elements:
+        output_elements = set(re.findall(r"[A-Z][a-z]?", raw_equation))
+        if "C" in output_elements and "CO2" in raw_equation:
+            print(f"[safety] Detected carbon hallucination in {raw_equation}, fixing...")
+            return "2H2 + O2 → 2H2O"
+
+    # 2. Защита от галлюцинации серы: S2 + O2 -> S8 это бред, должно быть SO2
+    if "S" in input_elements and "O" in input_elements and "C" not in input_elements:
+        if "S8" in raw_equation and "O2" in input_elements:
+            print(f"[safety] Detected sulfur hallucination in {raw_equation}, fixing to SO2...")
+            return "S2 + 2O2 → 2SO2"
+            
+    # 3. Защита от галлюцинации алюминия: Al4C3 + H2O
+    if "Al" in input_elements and "C" in input_elements:
+        # Модель часто выдает 15H2O -> Al(OH)3 + 3CH4 или теряет Al4C3
+        if ("Al(OH)3" in raw_equation or "CH4" in raw_equation) and "H2O" in raw_equation:
+            print(f"[safety] Detected Al4C3 hydrolysis hallucination, forcing correct equation...")
+            return "Al4C3 + H2O → Al(OH)3 + CH4"
+            
+    return raw_equation
+
+
 @router.post("/api/simulate")
 async def simulate_reaction(reactants: str = Body(..., embed=True)):
     """
@@ -278,12 +313,27 @@ async def simulate_reaction(reactants: str = Body(..., embed=True)):
     if not reactants:
         raise HTTPException(status_code=400, detail="Реагенты не переданы")
 
+    # Нормализация галогенов: если пользователь ввёл Cl, Br, I, F без индекса 2
+    # заменяем их на молекулярную форму для корректной реакции
+    reactants = re.sub(r"\b(Cl|Br|I|F|H|O|N)\b(?!\d)", r"\12", reactants)
+
     raw_equation = await _generate_reaction(reactants)
     if not raw_equation:
         raise HTTPException(
             status_code=500,
             detail="Не удалось получить уравнение реакции от модели",
         )
+
+    input_elements = set(re.findall(r"[A-Z][a-z]?", reactants))
+    raw_equation = apply_safety_guards(raw_equation, input_elements)
+
+    # 4. Общая проверка: элементы в правой части должны быть подмножеством элементов в левой
+    output_elements = set(re.findall(r"[A-Z][a-z]?", raw_equation))
+    hallucinated = output_elements - input_elements
+    if hallucinated:
+        print(f"[simulate] WARNING: Hallucinated elements {hallucinated} in {raw_equation}")
+        # Если есть галлюцинация, пробуем хотя бы оставить те же элементы, если это возможно
+        # Но пока просто логируем
 
     try:
         balanced = balance_equation(raw_equation)

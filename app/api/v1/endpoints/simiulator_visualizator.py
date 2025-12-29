@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Body, HTTPException
 from urllib.parse import quote
 import numpy as np
+import random
 
 from app.api.v1.endpoints import simiulator as sim
 
@@ -68,52 +69,113 @@ async def _fetch_pubchem_sdf_by_formula(formula: str, record_type: str = "3d") -
 
 
 async def _get_sdf_any(compound: str) -> str | None:
+    # Удаляем коэффициенты и пробелы
+    compound = compound.strip()
+    
     alias_map = {
+        "Al": ["aluminum atom", "aluminium"],
+        "C": ["carbon atom"],
         "H2": ["hydrogen"],
         "O2": ["oxygen"],
         "H2O": ["water", "dihydrogen monoxide"],
         "CO2": ["carbon dioxide"],
         "NH3": ["ammonia"],
         "CH4": ["methane"],
+        "C2H4": ["ethylene", "ethene"],
+        "C2H2": ["acetylene", "ethyne"],
+        "C2H5OH": ["ethanol", "ethyl alcohol"],
+        "C2H6": ["ethane"],
+        "CH3OH": ["methanol"],
+        "CH3COOH": ["acetic acid"],
+        "C4H6": ["1,3-butadiene", "but-1-yne"],
+        "C4H10": ["butane"],
+        "C4H6Cl2": ["dichlorobutene"],
+        "Al4C3": ["aluminum carbide"],
+        "Al(OH)3": ["aluminum hydroxide"],
     }
 
     queries = []
+    # 1. Если это формула (содержит цифры и заглавные буквы), сначала пробуем поиск по формуле
+    is_formula = any(c.isdigit() for c in compound) and any(c.isupper() for c in compound)
+    
     trans = await _maybe_translate_to_en(compound)
     if trans:
         queries.append(trans)
     queries.append(compound)
-    # если это простая формула — добавляем общеизвестные имена
+    
     aliases = alias_map.get(compound.strip())
     if aliases:
         queries.extend(aliases)
+        
     for q in queries:
+        # Пробуем 3D, потом 2D
         for record_type in ("3d", "2d"):
-            sdf = await _fetch_pubchem_sdf_by_name(q, record_type=record_type)
-            if sdf:
-                return sdf
-            sdf = await _fetch_pubchem_sdf_by_formula(q, record_type=record_type)
-            if sdf:
-                return sdf
+            try:
+                # Если похоже на формулу — приоритет поиску по формуле
+                if is_formula:
+                    sdf = await _fetch_pubchem_sdf_by_formula(q, record_type=record_type)
+                    if sdf: return sdf
+                    sdf = await _fetch_pubchem_sdf_by_name(q, record_type=record_type)
+                    if sdf: return sdf
+                else:
+                    sdf = await _fetch_pubchem_sdf_by_name(q, record_type=record_type)
+                    if sdf: return sdf
+                    sdf = await _fetch_pubchem_sdf_by_formula(q, record_type=record_type)
+                    if sdf: return sdf
+            except Exception as e:
+                print(f"[sdf] Error fetching {q} ({record_type}): {e}")
+                continue
+
+    # 3. ПОСЛЕДНИЙ ШАНС: Генерация SDF для молекул/атомов вручную, если PubChem молчит
+    # Парсим формулу, чтобы понять состав
+    elements_dict = sim._parse_formula(compound)
+    if elements_dict:
+        print(f"[sdf] Generating fallback SDF for: {compound}")
+        # Генерируем "облако" атомов
+        total_atoms = sum(elements_dict.values())
+        sdf_lines = [
+            "",
+            "  Fallback",
+            "",
+            f"{total_atoms:3d}  0  0  0  0  0  0  0  0  0999 V2000"
+        ]
+        
+        # Расставляем атомы по кругу или случайно
+        idx = 0
+        for el, count in elements_dict.items():
+            for _ in range(count):
+                # Простая расстановка по спирали/сфере
+                phi = np.pi * (3. - np.sqrt(5.)) * idx
+                y = 1 - (idx / float(total_atoms - 1)) * 2 if total_atoms > 1 else 0
+                radius = np.sqrt(1 - y * y) if total_atoms > 1 else 0
+                x = np.cos(phi) * radius
+                z = np.sin(phi) * radius
+                
+                # Масштабируем
+                scale = 1.5
+                sdf_lines.append(f"{x*scale:10.4f}{y*scale:10.4f}{z*scale:10.4f} {el.ljust(3)} 0  0  0  0  0  0  0  0  0  0  0  0")
+                idx += 1
+        
+        sdf_lines.append("M  END")
+        return "\n".join(sdf_lines)
 
     return None
 
 
-def _pick_targets(left: list[str], right: list[str]) -> list[str]:
-    """Собираем список кандидатов без коэффициентов: сперва продукты, потом реагенты."""
-    candidates: list[str] = []
-    for group in (right, left):
-        for comp in group:
-            cleaned = sim._strip_leading_coeff(comp)  # type: ignore[attr-defined]
-            if cleaned:
-                candidates.append(cleaned)
-    # удаляем дубли сохраняя порядок
-    seen = set()
-    uniq: list[str] = []
-    for c in candidates:
-        if c not in seen:
-            uniq.append(c)
-            seen.add(c)
-    return uniq
+def _parse_side_coeffs(side: str) -> dict[str, int]:
+    """Парсим строку вида '2H2 + O2' и возвращаем {formula: coeff}."""
+    coeffs: dict[str, int] = {}
+    for part in side.split("+"):
+        token = part.strip()
+        if not token:
+            continue
+        m = re.match(r"^\s*(\d+)?\s*(.*)$", token)
+        if not m:
+            continue
+        coeff = int(m.group(1)) if m.group(1) else 1
+        formula = sim._strip_leading_coeff(m.group(2))
+        coeffs[formula] = coeffs.get(formula, 0) + coeff
+    return coeffs
 
 
 def _parse_sdf_atoms_and_components(sdf: str):
@@ -130,13 +192,24 @@ def _parse_sdf_atoms_and_components(sdf: str):
         return [], []
 
     atoms = []
-    for i in range(4, 4 + atom_count):
+    # Фолбэк на случай огромных SDF
+    max_atoms = 100
+    
+    # Эвристика для "огромных" структур (кристаллические решетки)
+    is_single_element = atom_count > 10
+    
+    for i in range(4, 4 + min(atom_count, max_atoms)):
         parts = lines[i].split()
         if len(parts) < 4:
             continue
         x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
         element = parts[3].strip()
         atoms.append({"element": element, "x": x, "y": y, "z": z})
+        
+    if is_single_element and all(a['element'] == atoms[0]['element'] for a in atoms):
+        atoms = atoms[:1]
+        atom_count = 1
+        bond_count = 0
 
     adj = [[] for _ in range(atom_count)]
     bond_start = 4 + atom_count
@@ -178,33 +251,99 @@ def _parse_sdf_atoms_and_components(sdf: str):
     return atoms, molecules
 
 
-def _parse_side_coeffs(side: str) -> dict[str, int]:
-    """Парсим строку вида '2H2 + O2' и возвращаем {formula: coeff}."""
-    coeffs: dict[str, int] = {}
-    for part in side.split("+"):
-        token = part.strip()
-        if not token:
+def _center_molecule(atoms):
+    """Центрирует молекулу в начале координат (0,0,0)."""
+    if not atoms:
+        return []
+    avg_x = sum(a['x'] for a in atoms) / len(atoms)
+    avg_y = sum(a['y'] for a in atoms) / len(atoms)
+    avg_z = sum(a['z'] for a in atoms) / len(atoms)
+    return [{**a, 'x': a['x'] - avg_x, 'y': a['y'] - avg_y, 'z': a['z'] - avg_z} for a in atoms]
+
+def interpolate_coords(start, end, alpha):
+    """Интерполирует координаты с добавлением хаотичного движения для эффекта реакции."""
+    noise_scale = 0.2 * (1.0 - abs(alpha - 0.5) * 2.0)  # Максимум шума на середине (t=0.5)
+    dx = random.uniform(-noise_scale, noise_scale)
+    dy = random.uniform(-noise_scale, noise_scale)
+    dz = random.uniform(-noise_scale, noise_scale)
+    
+    return {
+        'element': start['element'] if alpha < 0.5 else end['element'],
+        'x': start['x'] * (1 - alpha) + end['x'] * alpha + dx,
+        'y': start['y'] * (1 - alpha) + end['y'] * alpha + dy,
+        'z': start['z'] * (1 - alpha) + end['z'] * alpha + dz,
+    }
+
+def _match_atoms(r_atoms, p_atoms):
+    """Пытается сопоставить атомы двух молекул для более красивого морфинга."""
+    r_rem = list(r_atoms)
+    p_rem = list(p_atoms)
+    matched = []
+    
+    # Сначала сопоставляем атомы одного и того же элемента
+    for r_at in list(r_rem):
+        for p_at in list(p_rem):
+            if r_at['element'] == p_at['element']:
+                matched.append((r_at, p_at))
+                r_rem.remove(r_at)
+                p_rem.remove(p_at)
+                break
+                
+    # Остальные сопоставляем просто по порядку
+    while r_rem and p_rem:
+        matched.append((r_rem.pop(0), p_rem.pop(0)))
+        
+    return matched, r_rem, p_rem
+
+def _parse_sdf_atoms_and_bonds(sdf: str):
+    """Извлекает атомы и связи из SDF."""
+    lines = sdf.strip().splitlines()
+    if len(lines) < 4:
+        return [], []
+
+    counts_line = lines[3]
+    try:
+        atom_count = int(counts_line[0:3])
+        bond_count = int(counts_line[3:6])
+    except ValueError:
+        return [], []
+
+    atoms = []
+    for i in range(4, 4 + atom_count):
+        parts = lines[i].split()
+        if len(parts) < 4:
             continue
-        m = re.match(r"^\s*(\d+)?\s*(.*)$", token)
-        if not m:
+        x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
+        element = parts[3].strip()
+        atoms.append({"element": element, "x": x, "y": y, "z": z})
+
+    bonds = []
+    bond_start = 4 + atom_count
+    for i in range(bond_start, bond_start + bond_count):
+        if i >= len(lines):
+            break
+        line = lines[i]
+        try:
+            a = int(line[0:3]) - 1
+            b = int(line[3:6]) - 1
+            order = int(line[6:9]) if len(line) >= 9 else 1
+            bonds.append({"start": a, "end": b, "order": order})
+        except ValueError:
             continue
-        coeff = int(m.group(1)) if m.group(1) else 1
-        formula = sim._strip_leading_coeff(m.group(2))  # type: ignore[attr-defined]
-        coeffs[formula] = coeffs.get(formula, 0) + coeff
-    return coeffs
+
+    return atoms, bonds
 
 async def _collect_models(left: list[str], right: list[str]):
     """
     Возвращаем модели с явной стороной (reactant/product), без дублирования.
-    Используем исходные списки, чтобы не потерять связь сторона→молекула.
     """
     candidates: list[tuple[str, str]] = []
     for comp in left:
-        cleaned = sim._strip_leading_coeff(comp)  # type: ignore[attr-defined]
+        cleaned = sim._strip_leading_coeff(comp)
         if cleaned:
             candidates.append((cleaned, "reactant"))
     for comp in right:
-        cleaned = sim._strip_leading_coeff(comp)  # type: ignore[attr-defined]
+        cleaned = sim._strip_leading_coeff(comp)
         if cleaned:
             candidates.append((cleaned, "product"))
 
@@ -218,13 +357,18 @@ async def _collect_models(left: list[str], right: list[str]):
         sdf = await _get_sdf_any(comp)
         if not sdf:
             continue
-        atoms, molecules = _parse_sdf_atoms_and_components(sdf)
+        atoms, bonds = _parse_sdf_atoms_and_bonds(sdf)
+        
+        # Также получаем компоненты для корректного разделения молекул
+        _, molecules = _parse_sdf_atoms_and_components(sdf)
+        
         models.append(
             {
                 "compound": comp,
                 "format": "sdf",
                 "data": sdf,
                 "atoms": atoms,
+                "bonds": bonds,
                 "molecules": molecules,
                 "source": "PubChem",
                 "side": side,
@@ -232,40 +376,152 @@ async def _collect_models(left: list[str], right: list[str]):
         )
     return models
 
+def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30):
+    """Генерирует кадры анимации с глобальным сопоставлением атомов и связей."""
+    
+    def _flatten_models(models_list, side_start_x, coeffs_map, duplicate=False):
+        all_atoms = []
+        all_bonds = []
+        mol_idx_offset = 0
+        
+        for m in models_list:
+            coeff_val = coeffs_map.get(m["compound"], 1)
+            try:
+                count = int(coeff_val)
+            except:
+                count = 1
+            
+            # Если duplicate=False, рисуем только одну молекулу
+            actual_count = count if duplicate else 1
+            
+            centered_atoms = _center_molecule(m["atoms"])
+            
+            for c in range(actual_count):
+                # Смещаем молекулы, чтобы они не накладывались друг на друга
+                # Если их много, выстраиваем в сетку
+                shift_x = side_start_x + mol_idx_offset * 8.0
+                shift_y = (c % 3) * 4.0 - 4.0 if actual_count > 1 else 0
+                shift_z = (c // 3) * 4.0 - 4.0 if actual_count > 1 else 0
+                
+                atom_global_offset = len(all_atoms)
+                for i, a in enumerate(centered_atoms):
+                    all_atoms.append({
+                        **a,
+                        "x": a["x"] + shift_x,
+                        "y": a["y"] + shift_y,
+                        "z": a["z"] + shift_z,
+                        "side": m["side"],
+                        "mol_idx": mol_idx_offset,
+                        "compound": m["compound"],
+                        "label": f"{count}{m['compound']}" if count > 1 else m["compound"],
+                        "_orig_idx": atom_global_offset + i
+                    })
+                
+                for b in m.get("bonds", []):
+                    all_bonds.append({
+                        "start": atom_global_offset + b["start"],
+                        "end": atom_global_offset + b["end"],
+                        "mol_idx": mol_idx_offset
+                    })
+                mol_idx_offset += 1
+                
+        return all_atoms, all_bonds
 
-def interpolate_coords(start, end, alpha):
-    return {
-        'element': start['element'],
-        'x': start['x'] * (1 - alpha) + end['x'] * alpha,
-        'y': start['y'] * (1 - alpha) + end['y'] * alpha,
-        'z': start['z'] * (1 - alpha) + end['z'] * alpha,
+    # Для мёрфинга используем полное количество молекул (duplicate=True)
+    r_atoms, r_bonds = _flatten_models(reactant_models, -7.0, left_coeffs, duplicate=True)
+    p_atoms, p_bonds = _flatten_models(product_models, 7.0, right_coeffs, duplicate=True)
+    
+    # Для статических кадров (первый и последний) создаем версии с одной молекулой
+    r_atoms_single, r_bonds_single = _flatten_models(reactant_models, -7.0, left_coeffs, duplicate=False)
+    p_atoms_single, p_bonds_single = _flatten_models(product_models, 7.0, right_coeffs, duplicate=False)
+
+    # Сопоставляем атомы глобально
+    matched, r_rem, p_rem = _match_atoms(r_atoms, p_atoms)
+    
+    frames = []
+    # Добавляем специальный кадр в начало для режима "Реагенты" (одиночные молекулы)
+    # Мы пометим его, чтобы фронтенд знал
+    reactant_static_frame = {
+        'title': 'Реагенты',
+        'atoms': r_atoms_single,
+        'bonds': r_bonds_single,
+        'progress': 0,
+        'is_static': True
+    }
+    
+    product_static_frame = {
+        'title': 'Продукты',
+        'atoms': p_atoms_single,
+        'bonds': p_bonds_single,
+        'progress': 1.0,
+        'is_static': True
     }
 
-def make_morph_frames(reactant_mols, product_mols, steps=16):
-    # Простой morpher: для пар молекул одного размера/типа morph, иначе fade
-    frames = []
-    n = min(len(reactant_mols), len(product_mols))
-    for pair in range(n):
-        r_atoms = reactant_mols[pair]
-        p_atoms = product_mols[pair]
-        atoms_len = min(len(r_atoms), len(p_atoms))
-        for i in range(steps+1):
-            t = i / steps
-            frame_atoms = []
-            for a in range(atoms_len):
-                start = r_atoms[a]
-                end = p_atoms[a]
-                # интерполируем позицию, прозрачность — плавно 1
-                at = interpolate_coords(start, end, t)
-                at['opacity'] = 1.0
-                frame_atoms.append(at)
-            # если избыток — fadeout/fadein
-            for j in range(atoms_len, len(r_atoms)):
-                a = r_atoms[j]; at = dict(a); at['opacity'] = 1-t; frame_atoms.append(at)
-            for j in range(atoms_len, len(p_atoms)):
-                a = p_atoms[j]; at = dict(a); at['opacity'] = t; frame_atoms.append(at)
-            frames.append({ 'title': 'Морфинг', 'atoms': frame_atoms, 'progress': round(t,2) })
-    return frames
+    for step in range(steps + 1):
+        t = step / steps
+        t_smooth = t * t * (3 - 2 * t)
+        
+        frame_atoms = []
+        r_to_frame = {}
+        p_to_frame = {}
+        
+        # 1. Сопоставленные атомы (движутся и меняют владельца)
+        for r_at, p_at in matched:
+            idx = len(frame_atoms)
+            at = interpolate_coords(r_at, p_at, t_smooth)
+            at['opacity'] = 1.0
+            # Передаем mol_idx и название соединения в зависимости от прогресса
+            at['mol_idx'] = r_at['mol_idx'] if t < 0.5 else p_at['mol_idx']
+            at['compound'] = r_at['compound'] if t < 0.5 else p_at['compound']
+            at['label'] = r_at.get('label', r_at['compound']) if t < 0.5 else p_at.get('label', p_at['compound'])
+            frame_atoms.append(at)
+            r_to_frame[r_at["_orig_idx"]] = idx
+            p_to_frame[p_at["_orig_idx"]] = idx
+
+        # 2. Лишние реагенты (исчезают)
+        for r_at in r_rem:
+            idx = len(frame_atoms)
+            at = {**r_at}
+            at['opacity'] = 1.0 - t_smooth
+            at['z'] = r_at['z'] - t_smooth * 3 # Улетают вглубь
+            frame_atoms.append(at)
+            r_to_frame[r_at["_orig_idx"]] = idx
+
+        # 3. Лишние продукты (появляются)
+        for p_at in p_rem:
+            idx = len(frame_atoms)
+            at = {**p_at}
+            at['opacity'] = t_smooth
+            at['z'] = p_at['z'] + (1.0 - t_smooth) * 3 # Прилетают из глубины
+            frame_atoms.append(at)
+            p_to_frame[p_at["_orig_idx"]] = idx
+            
+        # Сборка связей для текущего кадра
+        frame_bonds = []
+        # Связи реагентов (исчезают)
+        for b in r_bonds:
+            if b["start"] in r_to_frame and b["end"] in r_to_frame:
+                frame_bonds.append({
+                    "start": r_to_frame[b["start"]],
+                    "end": r_to_frame[b["end"]],
+                    "opacity": 1.0 - t_smooth
+                })
+        # Связи продуктов (появляются)
+        for b in p_bonds:
+            if b["start"] in p_to_frame and b["end"] in p_to_frame:
+                frame_bonds.append({
+                    "start": p_to_frame[b["start"]],
+                    "end": p_to_frame[b["end"]],
+                    "opacity": t_smooth
+                })
+                
+        frames.append({
+            'title': 'Химическая реакция' if 0.1 < t < 0.9 else ('Реагенты' if t <= 0.1 else 'Продукты'),
+            'atoms': frame_atoms,
+            'bonds': frame_bonds,
+            'progress': round(t, 2)
+        })
+    return frames, reactant_static_frame, product_static_frame
 
 
 @router.post("/api/simulate-visualize")
@@ -289,6 +545,10 @@ async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
             status_code=500,
             detail="Не удалось получить уравнение реакции от модели",
         )
+
+    # Применяем защитные фильтры для исправления известных ошибок модели
+    input_elements = set(re.findall(r"[A-Z][a-z]?", reactants))
+    raw_equation = sim.apply_safety_guards(raw_equation, input_elements)  # type: ignore[attr-defined]
 
     # Балансируем и разбираем уравнение с максимально мягким фолбэком
     try:
@@ -352,58 +612,29 @@ async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
     left_coeffs = _parse_side_coeffs(left_raw)
     right_coeffs = _parse_side_coeffs(right_raw)
 
-    # --- MVP: fade-out старых молекул, fade-in новых, с учётом коэффициентов
-    def _spread_molecules(models_list, side_start_x, coeffs_map):
-        spread = []
-        offset = 0
-        for m in models_list:
-            coeff = coeffs_map.get(m["compound"], 1)
-            coeff = max(1, coeff)
-            mols = m.get("molecules") or []
-            if not mols:
-                mols = [m.get("atoms", [])]
-            for cidx in range(coeff):
-                for mol in mols:
-                    shift = side_start_x + offset * 3.0
-                    shifted = [{**a, "x": a["x"] + shift, "y": a["y"], "z": a["z"], "from": m["side"]} for a in mol]
-                    spread.append(shifted)
-                    offset += 1
-        return spread
-
-    reactant_mols = _spread_molecules(reactant_models, side_start_x=-6.0, coeffs_map=left_coeffs)
-    product_mols = _spread_molecules(product_models, side_start_x=+6.0, coeffs_map=right_coeffs)
-
     frames = []
-    if reactant_mols and product_mols:
-        frames = make_morph_frames(reactant_mols, product_mols, steps=18)
+    reactant_static = None
+    product_static = None
+    
+    if reactant_models and product_models:
+        frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30)
     else:
-        # старое поведение (fadein/fadeout)
-        # ... оставить как fallback ...
-        pass
-
-    model = models[0] if models else None
-
-    if model is None:
         model_error = "Не удалось получить 3D данные из PubChem ни для продуктов, ни для реагентов."
 
     # Убеждаемся, что уравнение всегда есть
     if not balanced or balanced.strip() == "→":
         balanced = f"{' + '.join(left)} → {' + '.join(right)}" if left and right else raw_equation
 
-    try:
-        print(f"[simulate-visualize][final_equation]: {balanced}")
-        print(f"[simulate-visualize][left]: {left}, [right]: {right}")
-    except Exception:
-        pass
-
     return {
         "reactants": reactants,
         "equation": balanced,
         "raw_equation": raw_equation,
         "info": info,
-        "model": model,
+        "model": models[0] if models else None,
         "model_error": model_error,
         "frames": frames,
+        "reactant_static": reactant_static,
+        "product_static": product_static,
         "models": models,
     }
 

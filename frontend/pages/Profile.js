@@ -10,7 +10,7 @@ const Profile = () => {
   if (!user) return React.createElement(Navigate, { to: '/login' });
 
   return React.createElement('div', { className: 'container' },
-    React.createElement('h1', { style: { marginBottom: '20px' } }, 'My Profile'),
+    React.createElement('h1', { style: { marginBottom: '20px' } }, 'Мой профиль'),
     React.createElement('div', { className: 'profile-card' },
       React.createElement('div', { className: 'profile-detail' },
         React.createElement('span', { className: 'profile-label' }, 'Имя пользователя'),
