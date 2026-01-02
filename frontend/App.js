@@ -12,7 +12,7 @@ import ResetPassword from './pages/ResetPassword.js';
 import Admin from './pages/Admin.js';
 import Visualizer from './pages/Visualizer.jsx';
 import Simulator from './pages/Simulator.js';
-import Builder from './pages/Builder.js';
+import Builder from './pages/Builder.jsx';
 import api from './services/api.js';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 
@@ -32,6 +32,7 @@ const App = () => {
         React.createElement(Route, { path: "/visualizer", element: React.createElement(Visualizer) }),
         React.createElement(Route, { path: "/simulator", element: React.createElement(Simulator) }),
         React.createElement(Route, { path: "/builder", element: React.createElement(Builder) }),
+        React.createElement(Route, { path: "/constructor", element: React.createElement(Navigate, { to: "/builder" }) }),
         React.createElement(Route, { path: "*", element: React.createElement(Navigate, { to: "/" }) })
       )
     )

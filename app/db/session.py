@@ -11,7 +11,7 @@ if str(settings.DATABASE_URL).startswith("sqlite"):
 engine = create_engine(
     str(settings.DATABASE_URL),
     connect_args=connect_args,
-    echo=True
+    echo=False
 )
 
 # Создаём фабрику сессий

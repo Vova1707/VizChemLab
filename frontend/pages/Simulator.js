@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Navigate } from 'react-router-dom';
+import { getSessionData, setSessionData } from '../services/api';
 
 const toPretty = (eq = '') => {
   const map = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
@@ -61,20 +62,80 @@ const getRadiusByElement = (el) => (ATOMIC_RADII[el] || 0.8) * 0.8;
 
 const Simulator = () => {
   const { user } = useAuth();
-  const [reactants, setReactants] = useState('');
-  const [equation, setEquation] = useState('');
-  const [info, setInfo] = useState(null);
-  const [model, setModel] = useState(null);
-  const [frames, setFrames] = useState([]);
-  const [reactantStatic, setReactantStatic] = useState(null);
-  const [productStatic, setProductStatic] = useState(null);
-  const [frameIndex, setFrameIndex] = useState(0);
+  const [periodicTable, setPeriodicTable] = useState([]);
+  const [isLoadingConstants, setIsLoadingConstants] = useState(true);
+
+  // Загрузка констант из БД
+  useEffect(() => {
+    const fetchConstants = async () => {
+      try {
+        const response = await fetch('/api/constants');
+        const data = await response.json();
+        setPeriodicTable(data.periodic_table);
+      } catch (error) {
+        console.error('Failed to fetch constants:', error);
+      } finally {
+        setIsLoadingConstants(false);
+      }
+    };
+    fetchConstants();
+  }, []);
+
+  const getColorByElement = (el) => {
+    const found = periodicTable.find(e => e.symbol === el);
+    return found ? found.color : (CPK_COLORS[el] || '#cccccc');
+  };
+
+  const getRadiusByElement = (el) => {
+    const found = periodicTable.find(e => e.symbol === el);
+    // В базе радиус в pm, в Simulator.js он был в каких-то своих единицах (0.37, 0.32)
+    // В Builder.jsx мы делим на 100. Давайте попробуем согласовать.
+    return found ? found.radius : (ATOMIC_RADII[el] || 0.8) * 0.8;
+  };
+
+  const [reactants, setReactants] = useState(() => {
+    return localStorage.getItem('simulator_reactants') || '';
+  });
+  const [equation, setEquation] = useState(() => {
+    return localStorage.getItem('simulator_equation') || '';
+  });
+  const [info, setInfo] = useState(() => {
+    const saved = localStorage.getItem('simulator_info');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [model, setModel] = useState(() => {
+    const saved = localStorage.getItem('simulator_model');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [frames, setFrames] = useState(() => {
+    const saved = localStorage.getItem('simulator_frames');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [reactantStatic, setReactantStatic] = useState(() => {
+    const saved = localStorage.getItem('simulator_reactantStatic');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [productStatic, setProductStatic] = useState(() => {
+    const saved = localStorage.getItem('simulator_productStatic');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [frameIndex, setFrameIndex] = useState(() => {
+    const saved = localStorage.getItem('simulator_frameIndex');
+    return saved ? parseInt(saved, 10) : 0;
+  });
   const [playing, setPlaying] = useState(false);
-  const [fps, setFps] = useState(1.2);
+  const [fps, setFps] = useState(() => {
+    const saved = localStorage.getItem('simulator_fps');
+    return saved ? parseFloat(saved) : 1.2;
+  });
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('simulator_viewMode') || 'morph';
+  });
   const [modelError, setModelError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('morph'); // 'reactants', 'products', 'morph'
+  const [history, setHistory] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const viewerRef = useRef();
   const v3dRef = useRef(null);
   const timerRef = useRef(null);
@@ -82,6 +143,120 @@ const Simulator = () => {
   const isNewSimRef = useRef(false);
   const viewStatesRef = useRef({ reactants: null, products: null, morph: null });
   const prevViewModeRef = useRef('morph');
+
+  // Сохранение в localStorage и сессию
+  useEffect(() => {
+    localStorage.setItem('simulator_reactants', reactants);
+    if (user) setSessionData({ simulator_reactants: reactants });
+  }, [reactants, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_equation', equation);
+    if (user) setSessionData({ simulator_equation: equation });
+  }, [equation, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_info', JSON.stringify(info));
+    if (user) setSessionData({ simulator_info: info });
+  }, [info, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_model', JSON.stringify(model));
+    if (user) setSessionData({ simulator_model: model });
+  }, [model, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_frames', JSON.stringify(frames));
+    if (user) setSessionData({ simulator_frames: frames });
+  }, [frames, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_reactantStatic', JSON.stringify(reactantStatic));
+    if (user) setSessionData({ simulator_reactantStatic: reactantStatic });
+  }, [reactantStatic, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_productStatic', JSON.stringify(productStatic));
+    if (user) setSessionData({ simulator_productStatic: productStatic });
+  }, [productStatic, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_frameIndex', frameIndex.toString());
+    if (user) setSessionData({ simulator_frameIndex: frameIndex });
+  }, [frameIndex, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_fps', fps.toString());
+    if (user) setSessionData({ simulator_fps: fps });
+  }, [fps, user]);
+
+  useEffect(() => {
+    localStorage.setItem('simulator_viewMode', viewMode);
+    if (user) setSessionData({ simulator_viewMode: viewMode });
+  }, [viewMode, user]);
+
+  // Восстановление из сессии при монтировании
+  useEffect(() => {
+    const loadSession = async () => {
+      const data = await getSessionData();
+      if (data.simulator_reactants) setReactants(data.simulator_reactants);
+      if (data.simulator_equation) setEquation(data.simulator_equation);
+      if (data.simulator_info) setInfo(data.simulator_info);
+      if (data.simulator_model) setModel(data.simulator_model);
+      if (data.simulator_frames) setFrames(data.simulator_frames);
+      if (data.simulator_reactantStatic) setReactantStatic(data.simulator_reactantStatic);
+      if (data.simulator_productStatic) setProductStatic(data.simulator_productStatic);
+      if (data.simulator_frameIndex !== undefined) setFrameIndex(data.simulator_frameIndex);
+      if (data.simulator_fps !== undefined) setFps(data.simulator_fps);
+      if (data.simulator_viewMode) setViewMode(data.simulator_viewMode);
+    };
+    loadSession();
+    fetchHistory();
+    const style = document.createElement('style');
+    style.innerHTML = `
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: var(--primary);
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const resp = await fetch('/api/simulate/history');
+      if (resp.ok) {
+        const data = await resp.json();
+        setHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch simulator history:', e);
+    }
+  };
+
+  const handleDeleteHistory = async (query) => {
+    try {
+      const resp = await fetch(`/api/simulate/history/${encodeURIComponent(query)}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        fetchHistory();
+        setDeleteConfirm(null);
+      }
+    } catch (e) {
+      console.error('Failed to delete history item:', e);
+    }
+  };
 
   const handleSimulate = async (e) => {
     e.preventDefault();
@@ -98,6 +273,13 @@ const Simulator = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setModelError('');
     setError('');
+    
+    // Очищаем вьювер при новом поиске
+    if (viewerRef.current) {
+      viewerRef.current.innerHTML = '';
+      v3dRef.current = null;
+    }
+
     // Сбрасываем сохраненные состояния камер
     viewStatesRef.current = { reactants: null, products: null, morph: null };
     isNewSimRef.current = true;
@@ -128,6 +310,9 @@ const Simulator = () => {
       setProductStatic(data.product_static);
       lastFramesRef.current = nextFrames;
       if (nextFrames.length > 1) setPlaying(true);
+      
+      // Обновляем историю после успешной симуляции
+      fetchHistory();
     } catch (err) {
       setError(err.message || 'Неизвестная ошибка');
     } finally {
@@ -139,6 +324,14 @@ const Simulator = () => {
     const renderFrame = async () => {
       const list = frames.length ? frames : lastFramesRef.current;
       if (!list.length || !viewerRef.current) return;
+
+      // Если вьювер был очищен (v3dRef.current === null), нужно дождаться следующего цикла отрисовки
+      // или пересоздать его. Но лучше просто пропустить один кадр.
+      if (!v3dRef.current && viewerRef.current.innerHTML === '') {
+          await load3Dmol();
+          if (!viewerRef.current) return;
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#f8faff' });
+      }
 
       let currentFrame;
       if (viewMode === 'reactants') {
@@ -311,22 +504,210 @@ const Simulator = () => {
     }
   };
 
-  if (!user) return React.createElement(Navigate, { to: '/login' });
-
-  return React.createElement('div', { className: 'container' },
-    React.createElement('div', { className: 'dashboard-header' },
-      React.createElement('h1', null, 'Симулятор реакций'),
-      React.createElement('p', null, 'Введите реагенты, чтобы получить уравнение, сгенерированное моделью phi3 через локальную Ollama.')
+  return React.createElement('div', { 
+    style: {
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'stretch',
+      justifyContent: 'center',
+      padding: '40px',
+      gap: '20px',
+      background: 'var(--bg-body)',
+      maxWidth: '100vw',
+      overflowX: 'auto'
+    }
+  },
+    // Модальное окно подтверждения удаления
+    deleteConfirm && React.createElement('div', {
+      style: {
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        backdropFilter: 'blur(4px)'
+      }
+    },
+      React.createElement('div', { 
+        className: 'glass-card', 
+        style: {
+          width: 400,
+          padding: '30px',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px'
+        }
+      },
+        React.createElement('h3', { style: { margin: 0, color: 'var(--text-main)' } }, 'Удаление из истории'),
+        React.createElement('p', { style: { margin: 0, color: 'var(--text-secondary)' } }, 
+          'Вы точно хотите удалить этот запрос: ', 
+          React.createElement('strong', null, deleteConfirm), 
+          '?'
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: '12px', justifyContent: 'center' } },
+          React.createElement('button', { 
+            onClick: () => setDeleteConfirm(null),
+            className: 'btn btn-sm',
+            style: { background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }
+          }, 'Отмена'),
+          React.createElement('button', { 
+            onClick: () => handleDeleteHistory(deleteConfirm),
+            className: 'btn btn-sm',
+            style: { background: 'var(--error)', border: 'none', color: 'white' }
+          }, 'Удалить')
+        )
+      )
     ),
-    React.createElement('div', { className: 'form-container', style: { maxWidth: '800px', margin: '0 auto' } },
-      React.createElement('h2', { className: 'form-title' }, 'Симулятор химических реакций'),
-      React.createElement('form', { onSubmit: handleSimulate },
+
+    // Левая панель истории
+    React.createElement('div', {
+      className: 'glass-card',
+      style: {
+        width: 300,
+        height: 'calc(100vh - 80px)', // Высота на весь экран за вычетом отступов
+        position: 'sticky',
+        top: '40px',
+        borderRadius: 'var(--radius)',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        margin: 0
+      }
+    },
+      React.createElement('h2', { 
+        style: { 
+          fontSize: '18px', 
+          fontWeight: '700', 
+          color: 'var(--text-main)',
+          margin: 0,
+          borderBottom: '1px solid var(--border-color)',
+          paddingBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }
+      },
+        React.createElement('span', { style: { width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)' } }),
+        'История'
+      ),
+      React.createElement('div', { 
+        className: 'custom-scrollbar', 
+        style: { 
+          flex: 1, 
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          paddingRight: '4px'
+        }
+      },
+        history.length === 0 ? (
+          React.createElement('div', { 
+            style: { 
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-secondary)', 
+              fontSize: 14,
+              fontStyle: 'italic',
+              opacity: 0.6
+            }
+          }, 'История пуста')
+        ) : (
+          history.map((item, idx) => (
+            React.createElement('div', { key: idx, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('button', {
+                onClick: (e) => {
+                  e.stopPropagation();
+                  setDeleteConfirm(item.query);
+                },
+                style: {
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--error)',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  padding: '0 4px',
+                  opacity: 0.6,
+                  transition: 'opacity 0.2s'
+                },
+                onMouseOver: (e) => e.target.style.opacity = 1,
+                onMouseOut: (e) => e.target.style.opacity = 0.6
+              }, '×'),
+              React.createElement('button', {
+                onClick: () => {
+                  setReactants(item.query);
+                  // Мы не вызываем handleSimulate напрямую, так как он ожидает Event
+                  // Вместо этого мы создаем искусственный объект события или рефакторим
+                  const fakeEvent = { preventDefault: () => {} };
+                  // Но лучше просто вызвать логику поиска. Для простоты здесь:
+                  document.getElementById('simulate-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                },
+                className: 'btn-isomer',
+                style: {
+                  flex: 1,
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  fontSize: '14px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  color: 'var(--text-main)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  transition: 'all 0.2s'
+                }
+              }, item.query)
+            )
+          ))
+        )
+      )
+    ),
+
+    React.createElement('div', { 
+      style: { 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '24px', 
+        maxWidth: '1000px', 
+        height: 'calc(100vh - 80px)', // Фиксированная высота как у истории
+        position: 'sticky',
+        top: '40px'
+      } 
+    },
+      React.createElement('div', { 
+        className: 'glass-card', 
+        style: { 
+          width: '100%', 
+          maxWidth: '100%', 
+          margin: 0, 
+          padding: '32px', 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflowY: 'auto',
+          borderRadius: 'var(--radius)' // Явно задаем радиус как у истории
+        } 
+      },
+        React.createElement('div', { style: { marginBottom: '24px', textAlign: 'center' } },
+          React.createElement('h1', { style: { fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } }, 'Симулятор реакций'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '1.1rem' } }, 'Введите реагенты, чтобы получить уравнение реакции')
+        ),
+        React.createElement('form', { id: 'simulate-form', onSubmit: handleSimulate },
         React.createElement('div', { className: 'form-group' },
           React.createElement('label', { htmlFor: 'reactants' }, 'Реагенты'),
           React.createElement('input', {
             id: 'reactants',
             className: 'form-input',
-            style: { backgroundColor: 'var(--bg-body)', color: 'var(--text-main)' },
+            style: { backgroundColor: 'var(--bg-body)', color: 'var(--text-main)', fontSize: '1.2rem', padding: '16px 20px' },
             type: 'text',
             value: reactants,
             onChange: e => setReactants(e.target.value),
@@ -334,7 +715,7 @@ const Simulator = () => {
             required: true
           })
         ),
-        React.createElement('button', { className: 'btn', type: 'submit', disabled: loading }, loading ? 'Считаем...' : 'Симулировать')
+        React.createElement('button', { className: 'btn', type: 'submit', disabled: loading, style: { height: '56px', fontSize: '1.1rem', fontWeight: '600' } }, loading ? 'Считаем...' : 'Симулировать')
       ),
       equation && React.createElement('div', {
         className: 'success-message',
@@ -468,7 +849,8 @@ const Simulator = () => {
       modelError && React.createElement('div', { className: 'warning-message', style: { marginTop: 12, textAlign: 'center', color: '#c47b2d' } }, modelError),
       error && React.createElement('div', { className: 'error-message', style: { marginTop: 20 } }, error)
     )
-  );
+  )
+);
 };
 
 export default Simulator;

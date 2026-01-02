@@ -33,8 +33,8 @@ const Register = () => {
       if (data.success) {
         setLoading(false);
         setError('');
-        setMessage('Регистрация успешна! На вашу почту отправлена ссылка для подтверждения.');
-        // Не делать navigate сразу, пусть пользователь сам перейдет после прочтения
+        setMessage('Регистрация успешна! Сейчас вы будете перенаправлены на страницу входа.');
+        setTimeout(() => navigate('/login'), 2000);
       } else {
         setError(data.message || 'Ошибка регистрации');
         setLoading(false);

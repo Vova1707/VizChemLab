@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const checkAuth = async () => {
+    setLoading(true);
     try {
       const resp = await fetch('/api/me', { credentials: 'include' });
       if (resp.ok) {
@@ -17,26 +18,29 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
       }
     } catch (error) {
-      setUser(null); // Сервер не отвечает — не аутентифицирован
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 2000);
     checkAuth();
-    return () => clearTimeout(timeout);
   }, []);
 
   const login = async (email, password) => {
-    await fetch('/api/login', {
+    const resp = await fetch('/api/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
+    const data = await resp.json();
+    if (!data.success) {
+      throw new Error(data.message || 'Ошибка входа');
+    }
     await checkAuth();
+    return data;
   };
 
   const register = async (username, email, password) => {
@@ -58,6 +62,18 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const sendVerification = async () => {
+    try {
+      const resp = await fetch('/api/send-verification', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      return await resp.json();
+    } catch (error) {
+      return { success: false, message: 'Ошибка сети' };
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ 
@@ -67,7 +83,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, checkAuth }}>
+    <AuthContext.Provider value={{ user, login, register, logout, sendVerification, loading, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

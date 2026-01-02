@@ -1,4 +1,5 @@
 import aiosmtplib
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
@@ -22,15 +23,25 @@ async def send_verification_email(email_to: str, token: str):
     message.attach(MIMEText(html, "html", "utf-8"))
 
     smtp_password = settings.SMTP_PASSWORD.get_secret_value()
+    
+    # Создаем контекст SSL, который игнорирует проверку сертификатов (для исправления ошибки CERTIFICATE_VERIFY_FAILED)
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
 
-    await aiosmtplib.send(
-        message,
-        hostname=settings.SMTP_HOST,
-        port=settings.SMTP_PORT,
-        username=settings.SMTP_USER,
-        password=smtp_password,
-        use_tls=True,
-    )
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=smtp_password,
+            use_tls=True,
+            timeout=15,
+            tls_context=context,
+        )
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
 
 async def send_reset_password_email(email_to: str, token: str):
@@ -43,7 +54,7 @@ async def send_reset_password_email(email_to: str, token: str):
     html = f"""
     <html>
       <body>
-        <p>Вы запросили сброс пароля.</p>зщ
+        <p>Вы запросили сброс пароля.</p>
         <p>Нажмите кнопку ниже, чтобы задать новый пароль:</p>
         <a href="{link}" style="display:inline-block; padding:10px 20px; background:#dc3545; color:white; text-decoration:none; border-radius:4px;">Сбросить пароль</a>
         <p>Ссылка действительна 1 час.</p>
@@ -54,11 +65,21 @@ async def send_reset_password_email(email_to: str, token: str):
     message.attach(MIMEText(html, "html", "utf-8"))
 
     smtp_password = settings.SMTP_PASSWORD.get_secret_value()
-    await aiosmtplib.send(
-        message,
-        hostname=settings.SMTP_HOST,
-        port=settings.SMTP_PORT,
-        username=settings.SMTP_USER,
-        password=smtp_password,
-        use_tls=True,
-    )
+    
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=smtp_password,
+            use_tls=True,
+            timeout=15,
+            tls_context=context,
+        )
+    except Exception as e:
+        print(f"Failed to send email: {e}")

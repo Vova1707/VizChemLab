@@ -17,7 +17,7 @@ from app.core.security import get_password_hash, verify_password, generate_verif
 from app.utils.email import send_verification_email, send_reset_password_email
 
 import logging
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, get_current_user_optional
 
 
 router = APIRouter()
@@ -81,9 +81,8 @@ def login(
         return templates.TemplateResponse("auth/return_login.html", {"request": request, "text": "Почта не подтверждена"})
 
 
-    active_sessions.add(user.id)
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="session_id", value=str(user.id), httponly=True, samesite="lax")
+    response.set_cookie(key="session_id", value=str(user.id), httponly=True, samesite="lax", path="/")
     return response
 
 
@@ -110,13 +109,8 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
 @router.post("/logout", response_class=HTMLResponse)
 def logout(request: Request):
-    session_id = request.cookies.get("session_id")
-    if session_id and session_id.isdigit():
-        user_id = int(session_id)
-        active_sessions.discard(user_id)    
-
     response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie("session_id")
+    response.delete_cookie("session_id", path="/")
     return response
 
 
@@ -195,11 +189,28 @@ async def api_register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = generate_verification_token(email)
-    if background_tasks:
-        background_tasks.add_task(send_verification_email, email, token)
+    
+    # Регистрация теперь не отправляет письмо автоматически
+    # token = generate_verification_token(email)
+    # if background_tasks:
+    #     background_tasks.add_task(send_verification_email, email, token)
+    
     logger.info(f"/api/register: Успешная регистрация {email}")
-    return JSONResponse(content={"success": True, "message": "Регистрация успешна! Проверьте почту."})
+    return JSONResponse(content={"success": True, "message": "Регистрация успешна!"})
+
+@router.post("/api/send-verification")
+async def api_send_verification(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if user.is_verified:
+        return JSONResponse({"success": False, "message": "Email уже подтверждён."}, status_code=400)
+    
+    token = generate_verification_token(user.email)
+    background_tasks.add_task(send_verification_email, user.email, token)
+    
+    return {"success": True, "message": "Письмо для подтверждения отправлено."}
 
 @router.post("/api/login")
 def api_login(
@@ -213,11 +224,13 @@ def api_login(
     if not user or not verify_password(password, user.hashed_password):
         logger.info(f"/api/login: Ошибка входа для пользователя {email}")
         return JSONResponse({"success": False, "message": "Неверный email или пароль."}, status_code=401)
-    if not user.is_verified:
-        logger.info(f"/api/login: Почта не подтверждена для {email}")
-        return JSONResponse({"success": False, "message": "Почта не подтверждена."}, status_code=403)
-    active_sessions.add(user.id)
-    response.set_cookie(key="session_id", value=str(user.id), httponly=True, samesite="lax")
+    
+    # Теперь разрешаем вход без подтвержденной почты
+    # if not user.is_verified:
+    #     logger.info(f"/api/login: Почта не подтверждена для {email}")
+    #     return JSONResponse({"success": False, "message": "Почта не подтверждена."}, status_code=401)
+    
+    response.set_cookie(key="session_id", value=str(user.id), httponly=True, samesite="lax", path="/")
     logger.info(f"/api/login: Вход выполнен {email}")
     return {"success": True, "message": "Вход успешен."}
 
@@ -277,7 +290,9 @@ def api_verify_email(token: str, db: Session = Depends(get_db)):
     return {"success": True, "message": "Email успешно подтверждён!"}
 
 @router.get("/api/me")
-def get_me(user: User = Depends(get_current_user)):
+def get_me(user: User = Depends(get_current_user_optional)):
+    if not user:
+        return None
     return {
         "id": user.id,
         "username": user.username,

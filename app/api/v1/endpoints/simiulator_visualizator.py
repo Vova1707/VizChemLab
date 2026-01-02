@@ -1,127 +1,83 @@
 import httpx
 import re
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from urllib.parse import quote
 import numpy as np
 import random
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from datetime import datetime
 
 from app.api.v1.endpoints import simiulator as sim
+from app.db.session import get_db
+from app.db.models import SearchHistory, User
+from app.api.v1.deps import get_current_user, get_current_user_optional
+from app.utils import pubchem
 
 router = APIRouter()
 
-LIBRETRANSLATE_URL = "https://libretranslate.com/translate"
-MYMEMORY_URL = "https://api.mymemory.translated.net/get"
-
-
-async def _maybe_translate_to_en(text: str) -> str | None:
-    """Если есть кириллица — пытаемся перевести на английский для PubChem."""
-    if not any("а" <= ch <= "я" or "А" <= ch <= "Я" for ch in text):
-        return None
-
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(MYMEMORY_URL, params={"q": text, "langpair": "ru|en"})
-            if r.status_code == 200:
-                data = r.json()
-                translated = data.get("responseData", {}).get("translatedText")
-                if translated:
-                    print(f"[translate] MyMemory RU->EN: '{text}' -> '{translated}'")
-                    return translated
-    except Exception as exc:
-        print(f"[translate] MyMemory failed for '{text}': {exc}")
-
-    try:
-        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
-            r = await client.post(
-                LIBRETRANSLATE_URL,
-                json={"q": text, "source": "ru", "target": "en", "format": "text"},
-                headers={"Content-Type": "application/json"},
-            )
-            if r.status_code == 200:
-                data = r.json()
-                translated = data.get("translatedText")
-                if translated:
-                    print(f"[translate] Libre RU->EN: '{text}' -> '{translated}'")
-                    return translated
-    except Exception as exc:
-        print(f"[translate] Libre failed for '{text}': {exc}")
-    return None
-
-
-async def _fetch_pubchem_sdf_by_name(query: str, record_type: str = "3d") -> str | None:
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{quote(query)}/SDF"
-    params = {"record_type": record_type}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(url, params=params)
-        if r.status_code == 200 and r.text.strip():
-            return r.text
-    return None
-
-
-async def _fetch_pubchem_sdf_by_formula(formula: str, record_type: str = "3d") -> str | None:
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/formula/{quote(formula)}/SDF"
-    params = {"record_type": record_type}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(url, params=params)
-        if r.status_code == 200 and r.text.strip():
-            return r.text
-    return None
+@router.post("/api/simulator/lookup-formula")
+async def lookup_formula_simulator(
+    formula: str = Body(..., embed=True),
+):
+    """Поиск SDF по химической формуле для симулятора"""
+    sdf = await pubchem.fetch_pubchem_sdf_by_formula(formula, record_type="3d")
+    if not sdf:
+        raise HTTPException(status_code=404, detail="Compound not found for this formula")
+    return {"sdf": sdf}
 
 
 async def _get_sdf_any(compound: str) -> str | None:
+    print(f"[sdf] Searching for: {compound}")
     # Удаляем коэффициенты и пробелы
     compound = compound.strip()
     
-    alias_map = {
-        "Al": ["aluminum atom", "aluminium"],
-        "C": ["carbon atom"],
-        "H2": ["hydrogen"],
-        "O2": ["oxygen"],
-        "H2O": ["water", "dihydrogen monoxide"],
-        "CO2": ["carbon dioxide"],
-        "NH3": ["ammonia"],
-        "CH4": ["methane"],
-        "C2H4": ["ethylene", "ethene"],
-        "C2H2": ["acetylene", "ethyne"],
-        "C2H5OH": ["ethanol", "ethyl alcohol"],
-        "C2H6": ["ethane"],
-        "CH3OH": ["methanol"],
-        "CH3COOH": ["acetic acid"],
-        "C4H6": ["1,3-butadiene", "but-1-yne"],
-        "C4H10": ["butane"],
-        "C4H6Cl2": ["dichlorobutene"],
-        "Al4C3": ["aluminum carbide"],
-        "Al(OH)3": ["aluminum hydroxide"],
-    }
-
+    # 1. Определяем, является ли ввод формулой (HF, H2O, SiO2)
+    is_formula = bool(re.match(r'^([A-Z][a-z]?\d*)+$', compound))
+    
     queries = []
-    # 1. Если это формула (содержит цифры и заглавные буквы), сначала пробуем поиск по формуле
-    is_formula = any(c.isdigit() for c in compound) and any(c.isupper() for c in compound)
     
-    trans = await _maybe_translate_to_en(compound)
-    if trans:
+    # ПРИОРИТЕТ 1: Если это формула, пробуем найти IUPAC название через API
+    # Это заменяет alias_map и делает поиск более точным
+    if is_formula:
+        api_name = await pubchem.fetch_name_by_formula(compound)
+        if api_name:
+            queries.append(api_name)
+    
+    # ПРИОРИТЕТ 2: Перевод (если ввели на русском)
+    trans = await pubchem._maybe_translate_to_en(compound)
+    if trans and trans not in queries:
         queries.append(trans)
-    queries.append(compound)
     
-    aliases = alias_map.get(compound.strip())
-    if aliases:
-        queries.extend(aliases)
+    # ПРИОРИТЕТ 3: Исходная строка
+    if compound not in queries:
+        queries.append(compound)
         
     for q in queries:
-        # Пробуем 3D, потом 2D
+        # Для каждого запроса в списке пробуем найти SDF
+        is_q_formula = bool(re.match(r'^([A-Z][a-z]?\d*)+$', q))
         for record_type in ("3d", "2d"):
             try:
-                # Если похоже на формулу — приоритет поиску по формуле
-                if is_formula:
-                    sdf = await _fetch_pubchem_sdf_by_formula(q, record_type=record_type)
-                    if sdf: return sdf
-                    sdf = await _fetch_pubchem_sdf_by_name(q, record_type=record_type)
-                    if sdf: return sdf
+                # Если текущий запрос q выглядит как формула — приоритет поиску по формуле
+                if is_q_formula:
+                    sdf = await pubchem.fetch_pubchem_sdf_by_formula(q, record_type=record_type)
+                    if sdf:
+                        print(f"[sdf] Found SDF for {compound} (formula: {q}, {record_type})")
+                        return sdf
+                    sdf = await pubchem.fetch_pubchem_sdf_by_name(q, record_type=record_type)
+                    if sdf:
+                        print(f"[sdf] Found SDF for {compound} (name: {q}, {record_type})")
+                        return sdf
                 else:
-                    sdf = await _fetch_pubchem_sdf_by_name(q, record_type=record_type)
-                    if sdf: return sdf
-                    sdf = await _fetch_pubchem_sdf_by_formula(q, record_type=record_type)
-                    if sdf: return sdf
+                    # Если это название (например "hydrogen fluoride") — приоритет поиску по имени
+                    sdf = await pubchem.fetch_pubchem_sdf_by_name(q, record_type=record_type)
+                    if sdf:
+                        print(f"[sdf] Found SDF for {compound} (name: {q}, {record_type})")
+                        return sdf
+                    sdf = await pubchem.fetch_pubchem_sdf_by_formula(q, record_type=record_type)
+                    if sdf:
+                        print(f"[sdf] Found SDF for {compound} (formula: {q}, {record_type})")
+                        return sdf
             except Exception as e:
                 print(f"[sdf] Error fetching {q} ({record_type}): {e}")
                 continue
@@ -159,6 +115,7 @@ async def _get_sdf_any(compound: str) -> str | None:
         sdf_lines.append("M  END")
         return "\n".join(sdf_lines)
 
+    print(f"[sdf] FAILED to find SDF for {compound}")
     return None
 
 
@@ -267,6 +224,9 @@ def interpolate_coords(start, end, alpha):
     dy = random.uniform(-noise_scale, noise_scale)
     dz = random.uniform(-noise_scale, noise_scale)
     
+    # Если элементы разные, плавно меняем их (на фронтенде это будет смена цвета)
+    # Мы оставляем тип элемента как 'start' до середины, затем переключаем на 'end'
+    # Это "стандартный" подход для 3Dmol, так как он не умеет в интерполяцию типов
     return {
         'element': start['element'] if alpha < 0.5 else end['element'],
         'x': start['x'] * (1 - alpha) + end['x'] * alpha + dx,
@@ -525,30 +485,63 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
 
 
 @router.post("/api/simulate-visualize")
-async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
-    """
-    Генерируем уравнение (phi3) + балансируем, затем достаём SDF первой
-    доступной молекулы (сначала из продуктов, иначе из реагентов) из PubChem,
-    чтобы фронт показал 3D.
-    """
-    reactants = reactants.strip()
-    if not reactants:
-        raise HTTPException(status_code=400, detail="Реагенты не переданы")
+async def simulate_visualize(
+    reactants: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Поиск SDF для симулятора по названию или формуле и генерация кадров анимации"""
+    # Сохраняем в историю только для авторизованных
+    if current_user:
+        existing = db.query(SearchHistory).filter(
+            SearchHistory.user_id == current_user.id,
+            SearchHistory.query == reactants,
+            SearchHistory.history_type == "simulator"
+        ).first()
+        
+        if existing:
+            existing.timestamp = datetime.utcnow()
+        else:
+            new_history = SearchHistory(
+                user_id=current_user.id,
+                query=reactants,
+                history_type="simulator"
+            )
+            db.add(new_history)
+        db.commit()
 
-    raw_equation = await sim._generate_reaction(reactants)  # type: ignore[attr-defined]
-    try:
-        print(f"[simulate-visualize][ollama_raw]: {raw_equation}")
-    except Exception:
-        pass
+    # Нормализация галогенов: если пользователь ввёл Cl, Br, I, F без индекса 2
+    # заменяем их на молекулярную форму для корректной реакции
+    reactants_normalized = re.sub(r"\b(Cl|Br|I|F|H|O|N)\b(?!\d)", r"\g<1>2", reactants)
+    print(f"[simulate-visualize] Input: {reactants}, Normalized: {reactants_normalized}")
+
+    raw_equation = ""
+    
+    # ПРОВЕРКА ФОЛБЭКА (без Ollama)
+    fallback_key = "+".join(sorted(reactants_normalized.upper().replace(" ", "").split("+")))
+    if hasattr(sim, 'SIMULATOR_FALLBACKS') and fallback_key in sim.SIMULATOR_FALLBACKS:
+        print(f"[simulate-visualize] Using fallback for {reactants_normalized}")
+        raw_equation = sim.SIMULATOR_FALLBACKS[fallback_key]
+    else:
+        try:
+            raw_equation = await sim._generate_reaction(reactants_normalized)
+            try:
+                print(f"[simulate-visualize][ollama_raw]: {raw_equation}")
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[simulate-visualize] Ollama failed: {e}")
+            pass
+
     if not raw_equation:
         raise HTTPException(
             status_code=500,
-            detail="Не удалось получить уравнение реакции от модели",
+            detail="Не удалось получить уравнение реакции. Проверьте, что Ollama запущена.",
         )
 
     # Применяем защитные фильтры для исправления известных ошибок модели
-    input_elements = set(re.findall(r"[A-Z][a-z]?", reactants))
-    raw_equation = sim.apply_safety_guards(raw_equation, input_elements)  # type: ignore[attr-defined]
+    input_elements = set(re.findall(r"[A-Z][a-z]?", reactants_normalized))
+    raw_equation = sim.apply_safety_guards(raw_equation, input_elements)
 
     # Балансируем и разбираем уравнение с максимально мягким фолбэком
     try:
@@ -604,6 +597,7 @@ async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
 
     # выбираем первую доступную молекулу, для которой найдём SDF
     models = await _collect_models(left, right)
+    print(f"[simulate-visualize] Collected {len(models)} models")
 
     # формируем кадры: реагенты -> переход -> продукты
     reactant_models = [m for m in models if m["side"] == "reactant"]
@@ -618,6 +612,7 @@ async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
     
     if reactant_models and product_models:
         frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30)
+        print(f"[simulate-visualize] Generated {len(frames)} animation frames")
     else:
         model_error = "Не удалось получить 3D данные из PubChem ни для продуктов, ни для реагентов."
 
@@ -637,4 +632,54 @@ async def simulate_and_visualize(reactants: str = Body(..., embed=True)):
         "product_static": product_static,
         "models": models,
     }
+
+@router.get("/api/simulate/history")
+async def get_simulator_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Получить историю запросов симулятора (последние 20)"""
+    if not current_user:
+        return []
+    history = db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.history_type == "simulator"
+    ).order_by(desc(SearchHistory.timestamp)).limit(20).all()
+    
+    return [{"query": h.query, "timestamp": h.timestamp.isoformat()} for h in history]
+
+@router.get("/api/visualizer/history")
+async def get_visualizer_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Получить историю запросов визуализатора (последние 20)"""
+    if not current_user:
+        return []
+    history = db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.history_type == "visualizer"
+    ).order_by(desc(SearchHistory.timestamp)).limit(20).all()
+    
+    return [{"query": h.query, "timestamp": h.timestamp.isoformat()} for h in history]
+
+@router.delete("/api/simulate/history/{query}")
+async def delete_simulate_history(
+    query: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Удалить конкретный запрос из истории симулятора"""
+    item = db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.query == query,
+        SearchHistory.history_type == "simulator"
+    ).first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+        
+    db.delete(item)
+    db.commit()
+    return {"status": "deleted"}
 

@@ -10,7 +10,8 @@ from alembic import context
 
 # Импортируем конфигурацию и метаданные
 from app.core.config import settings
-from app.db.base import Base  # ← ваш Base, где объявлены модели
+from app.db.base import Base
+from app.db.models import User, SearchHistory # Импортируем модели здесь для Alembic
 
 
 config = context.config

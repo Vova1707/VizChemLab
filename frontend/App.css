@@ -14,6 +14,10 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+  --success-bg: #dcfce7;
+  --success-text: #16a34a;
+  --orange-bg: #ffedd5;
+  --orange-text: #ea580c;
 }
 
 :root[data-theme='dark'] {
@@ -29,6 +33,10 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  --success-bg: #064e3b;
+  --success-text: #4ade80;
+  --orange-bg: #7c2d12;
+  --orange-text: #fb923c;
 }
 
 * {
@@ -40,9 +48,17 @@ body {
   margin: 0;
   font-family: var(--font-family);
   background-color: var(--bg-body);
+  background-image: 
+    radial-gradient(circle at 2px 2px, var(--border) 1px, transparent 0);
+  background-size: 40px 40px;
   color: var(--text-main);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+:root[data-theme='dark'] body {
+  background-image: 
+    radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0);
 }
 
 .glass-card {
@@ -478,6 +494,74 @@ a:hover {
 .profile-value {
   font-weight: 600;
   color: var(--text-main);
+}
+
+.btn-orange {
+  background-color: #f97316;
+  color: white;
+}
+
+.btn-orange:hover {
+  background-color: #ea580c;
+}
+
+.btn-success {
+  background-color: var(--success);
+}
+
+.btn-success:hover {
+  background-color: #059669;
+}
+
+/* Guest Banner */
+.guest-banner {
+  margin-top: 48px;
+  padding: 40px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  border-radius: 24px;
+  color: white;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.guest-banner h3 {
+  font-size: 1.75rem;
+  margin-bottom: 12px;
+}
+
+.guest-banner p {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin-bottom: 32px;
+}
+
+.guest-banner-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.account-info-card {
+  margin-top: 48px;
+  padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+/* Tool Icons Specific */
+.visualizer-icon { background: #e0e7ff !important; color: #4f46e5 !important; }
+.simulator-icon { background: var(--success-bg) !important; color: var(--success-text) !important; }
+.builder-icon { background: var(--orange-bg) !important; color: var(--orange-text) !important; }
+
+.tool-card {
+  transition: all 0.3s ease;
+}
+
+.tool-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg) !important;
+  border-color: var(--primary) !important;
 }
 
 /* Utilities */

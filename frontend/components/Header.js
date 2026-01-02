@@ -42,8 +42,13 @@ const Header = () => {
           React.createElement(Link, { key: 'sim', to: '/simulator', className: isActive('/simulator') }, 'Симулятор'),
           React.createElement(Link, { key: 'build', to: '/builder', className: isActive('/builder') }, 'Конструктор'),
           React.createElement('span', { key: 'sep', className: 'nav-separator' }, '|'),
-          React.createElement(Link, { key: 'profile', to: '/profile' }, user.username),
-          user.is_admin && React.createElement(Link, { key: 'admin', to: '/admin' }, 'Админ'),
+          React.createElement(Link, { 
+            key: 'profile', 
+            to: '/profile', 
+            className: isActive('/profile'),
+            style: { fontWeight: '600', color: 'var(--primary)' } 
+          }, user.username),
+          user.is_admin && React.createElement(Link, { key: 'admin', to: '/admin', className: isActive('/admin') }, 'Админ'),
           React.createElement('button', {
             key: 'theme',
             onClick: toggleTheme,

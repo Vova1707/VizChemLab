@@ -10,6 +10,15 @@ router = APIRouter()
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "phi3"
 
+SIMULATOR_FALLBACKS = {
+    "H2+O2": "2H2 + O2 → 2H2O",
+    "CL2+H2": "H2 + Cl2 → 2HCl",
+    "CL2+O2": "2Cl2 + O2 → 2Cl2O",
+    "H2+N2": "N2 + 3H2 → 2NH3",
+    "CH4+O2": "CH4 + 2O2 → CO2 + 2H2O",
+    "CL2+NA": "2Na + Cl2 → 2NaCl",
+    "FE+O2": "4Fe + 3O2 → 2Fe2O3",
+}
 
 def clean_equation(text: str) -> str:
     """Извлекает уравнение из LaTeX/markdown/текста, упрощённо."""
@@ -295,11 +304,16 @@ def apply_safety_guards(raw_equation: str, input_elements: set) -> str:
             
     # 3. Защита от галлюцинации алюминия: Al4C3 + H2O
     if "Al" in input_elements and "C" in input_elements:
-        # Модель часто выдает 15H2O -> Al(OH)3 + 3CH4 или теряет Al4C3
         if ("Al(OH)3" in raw_equation or "CH4" in raw_equation) and "H2O" in raw_equation:
             print(f"[safety] Detected Al4C3 hydrolysis hallucination, forcing correct equation...")
             return "Al4C3 + H2O → Al(OH)3 + CH4"
             
+    # 4. Защита для H2 + Cl2
+    if "H" in input_elements and "Cl" in input_elements and len(input_elements) == 2:
+        if "HCl" not in raw_equation:
+            print(f"[safety] Forcing H2 + Cl2 -> 2HCl")
+            return "H2 + Cl2 → 2HCl"
+
     return raw_equation
 
 
@@ -315,13 +329,28 @@ async def simulate_reaction(reactants: str = Body(..., embed=True)):
 
     # Нормализация галогенов: если пользователь ввёл Cl, Br, I, F без индекса 2
     # заменяем их на молекулярную форму для корректной реакции
-    reactants = re.sub(r"\b(Cl|Br|I|F|H|O|N)\b(?!\d)", r"\12", reactants)
+    reactants = re.sub(r"\b(Cl|Br|I|F|H|O|N)\b(?!\d)", r"\g<1>2", reactants)
 
-    raw_equation = await _generate_reaction(reactants)
+    # ПРОВЕРКА ФОЛБЭКА (без Ollama)
+    fallback_key = "+".join(sorted(reactants.upper().replace(" ", "").split("+")))
+    if fallback_key in SIMULATOR_FALLBACKS:
+        print(f"[simulate] Using fallback for {reactants}")
+        raw_equation = SIMULATOR_FALLBACKS[fallback_key]
+    else:
+        try:
+            raw_equation = await _generate_reaction(reactants)
+        except HTTPException as e:
+            # Если Ollama не запущена, но есть шанс найти реакцию, можно добавить сообщение
+            print(f"[simulate] Ollama error: {e.detail}")
+            raise e
+        except Exception as e:
+            print(f"[simulate] Unexpected error: {e}")
+            raise HTTPException(status_code=500, detail="Ошибка при генерации реакции")
+
     if not raw_equation:
         raise HTTPException(
             status_code=500,
-            detail="Не удалось получить уравнение реакции от модели",
+            detail="Не удалось получить уравнение реакции. Убедитесь, что Ollama запущена.",
         )
 
     input_elements = set(re.findall(r"[A-Z][a-z]?", reactants))

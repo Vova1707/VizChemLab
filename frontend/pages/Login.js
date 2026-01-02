@@ -20,12 +20,11 @@ const Login = () => {
     setLoading(true);
     try {
       await login(formData.email, formData.password);
-      await checkAuth();
       setLoading(false);
       setFormData({ email: '', password: '' });
       navigate('/profile');
     } catch (e) {
-      setError('Ошибка авторизации.');
+      setError(e.message || 'Ошибка авторизации.');
       setLoading(false);
     }
   }
