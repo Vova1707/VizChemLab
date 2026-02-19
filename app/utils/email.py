@@ -3,6 +3,9 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def send_verification_email(email_to: str, token: str):
     message = MIMEMultipart("alternative")
@@ -41,7 +44,7 @@ async def send_verification_email(email_to: str, token: str):
             tls_context=context,
         )
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        logger.error(f"Failed to send email: {e}")
 
 
 async def send_reset_password_email(email_to: str, token: str):
@@ -82,4 +85,4 @@ async def send_reset_password_email(email_to: str, token: str):
             tls_context=context,
         )
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        logger.error(f"Failed to send email: {e}")

@@ -13,6 +13,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def generate_verification_token(email: str) -> str:
+    
     serializer = URLSafeTimedSerializer(settings.SECRET_KEY)
     return serializer.dumps(email, salt=settings.VERIFICATION_SALT)
 

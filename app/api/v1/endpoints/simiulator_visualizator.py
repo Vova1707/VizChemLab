@@ -1,7 +1,5 @@
-import httpx
 import re
 from fastapi import APIRouter, Body, Depends, HTTPException
-from urllib.parse import quote
 import numpy as np
 import random
 from sqlalchemy.orm import Session
@@ -17,34 +15,29 @@ from app.utils import pubchem
 router = APIRouter()
 
 @router.post("/api/simulator/lookup-formula")
-async def lookup_formula_simulator(
-    formula: str = Body(..., embed=True),
-):
+async def lookup_formula_simulator(formula: str = Body(..., embed=True)):
     """Поиск SDF по химической формуле для симулятора"""
+
     sdf = await pubchem.fetch_pubchem_sdf_by_formula(formula, record_type="3d")
     if not sdf:
-        raise HTTPException(status_code=404, detail="Compound not found for this formula")
+        raise HTTPException(status_code=404, detail="Соединение не было найдено")
     return {"sdf": sdf}
 
 
 async def _get_sdf_any(compound: str) -> str | None:
-    print(f"[sdf] Searching for: {compound}")
-    # Удаляем коэффициенты и пробелы
     compound = compound.strip()
     
-    # 1. Определяем, является ли ввод формулой (HF, H2O, SiO2)
     is_formula = bool(re.match(r'^([A-Z][a-z]?\d*)+$', compound))
     
     queries = []
     
-    # ПРИОРИТЕТ 1: Если это формула, пробуем найти IUPAC название через API
-    # Это заменяет alias_map и делает поиск более точным
+    # ПРИОРИТЕТ 1: Если формула - ищем название через API
     if is_formula:
         api_name = await pubchem.fetch_name_by_formula(compound)
         if api_name:
             queries.append(api_name)
     
-    # ПРИОРИТЕТ 2: Перевод (если ввели на русском)
+    # ПРИОРИТЕТ 2: Перевод
     trans = await pubchem._maybe_translate_to_en(compound)
     if trans and trans not in queries:
         queries.append(trans)
@@ -54,40 +47,30 @@ async def _get_sdf_any(compound: str) -> str | None:
         queries.append(compound)
         
     for q in queries:
-        # Для каждого запроса в списке пробуем найти SDF
         is_q_formula = bool(re.match(r'^([A-Z][a-z]?\d*)+$', q))
         for record_type in ("3d", "2d"):
             try:
-                # Если текущий запрос q выглядит как формула — приоритет поиску по формуле
                 if is_q_formula:
                     sdf = await pubchem.fetch_pubchem_sdf_by_formula(q, record_type=record_type)
                     if sdf:
-                        print(f"[sdf] Found SDF for {compound} (formula: {q}, {record_type})")
                         return sdf
                     sdf = await pubchem.fetch_pubchem_sdf_by_name(q, record_type=record_type)
                     if sdf:
-                        print(f"[sdf] Found SDF for {compound} (name: {q}, {record_type})")
                         return sdf
                 else:
-                    # Если это название (например "hydrogen fluoride") — приоритет поиску по имени
                     sdf = await pubchem.fetch_pubchem_sdf_by_name(q, record_type=record_type)
                     if sdf:
-                        print(f"[sdf] Found SDF for {compound} (name: {q}, {record_type})")
                         return sdf
                     sdf = await pubchem.fetch_pubchem_sdf_by_formula(q, record_type=record_type)
                     if sdf:
-                        print(f"[sdf] Found SDF for {compound} (formula: {q}, {record_type})")
                         return sdf
-            except Exception as e:
-                print(f"[sdf] Error fetching {q} ({record_type}): {e}")
+            except Exception:
                 continue
 
-    # 3. ПОСЛЕДНИЙ ШАНС: Генерация SDF для молекул/атомов вручную, если PubChem молчит
-    # Парсим формулу, чтобы понять состав
+    # 3. Генерация SDF для молекул/атомов вручную, если нет PubChem 
     elements_dict = sim._parse_formula(compound)
     if elements_dict:
-        print(f"[sdf] Generating fallback SDF for: {compound}")
-        # Генерируем "облако" атомов
+
         total_atoms = sum(elements_dict.values())
         sdf_lines = [
             "",
@@ -96,11 +79,9 @@ async def _get_sdf_any(compound: str) -> str | None:
             f"{total_atoms:3d}  0  0  0  0  0  0  0  0  0999 V2000"
         ]
         
-        # Расставляем атомы по кругу или случайно
         idx = 0
         for el, count in elements_dict.items():
             for _ in range(count):
-                # Простая расстановка по спирали/сфере
                 phi = np.pi * (3. - np.sqrt(5.)) * idx
                 y = 1 - (idx / float(total_atoms - 1)) * 2 if total_atoms > 1 else 0
                 radius = np.sqrt(1 - y * y) if total_atoms > 1 else 0
@@ -115,7 +96,6 @@ async def _get_sdf_any(compound: str) -> str | None:
         sdf_lines.append("M  END")
         return "\n".join(sdf_lines)
 
-    print(f"[sdf] FAILED to find SDF for {compound}")
     return None
 
 
@@ -136,7 +116,7 @@ def _parse_side_coeffs(side: str) -> dict[str, int]:
 
 
 def _parse_sdf_atoms_and_components(sdf: str):
-    """Извлекает атомы, связи и группы (молекулы) по связности из SDF."""
+    """Извлекает атомы из SDF."""
     lines = sdf.strip().splitlines()
     if len(lines) < 4:
         return [], []
@@ -152,7 +132,6 @@ def _parse_sdf_atoms_and_components(sdf: str):
     # Фолбэк на случай огромных SDF
     max_atoms = 100
     
-    # Эвристика для "огромных" структур (кристаллические решетки)
     is_single_element = atom_count > 10
     
     for i in range(4, 4 + min(atom_count, max_atoms)):
@@ -224,9 +203,6 @@ def interpolate_coords(start, end, alpha):
     dy = random.uniform(-noise_scale, noise_scale)
     dz = random.uniform(-noise_scale, noise_scale)
     
-    # Если элементы разные, плавно меняем их (на фронтенде это будет смена цвета)
-    # Мы оставляем тип элемента как 'start' до середины, затем переключаем на 'end'
-    # Это "стандартный" подход для 3Dmol, так как он не умеет в интерполяцию типов
     return {
         'element': start['element'] if alpha < 0.5 else end['element'],
         'x': start['x'] * (1 - alpha) + end['x'] * alpha + dx,
@@ -235,12 +211,11 @@ def interpolate_coords(start, end, alpha):
     }
 
 def _match_atoms(r_atoms, p_atoms):
-    """Пытается сопоставить атомы двух молекул для более красивого морфинга."""
+    """атомы двух молекул для более красивого морфинга"""
     r_rem = list(r_atoms)
     p_rem = list(p_atoms)
     matched = []
     
-    # Сначала сопоставляем атомы одного и того же элемента
     for r_at in list(r_rem):
         for p_at in list(p_rem):
             if r_at['element'] == p_at['element']:
@@ -249,7 +224,6 @@ def _match_atoms(r_atoms, p_atoms):
                 p_rem.remove(p_at)
                 break
                 
-    # Остальные сопоставляем просто по порядку
     while r_rem and p_rem:
         matched.append((r_rem.pop(0), p_rem.pop(0)))
         
@@ -295,7 +269,7 @@ def _parse_sdf_atoms_and_bonds(sdf: str):
 
 async def _collect_models(left: list[str], right: list[str]):
     """
-    Возвращаем модели с явной стороной (reactant/product), без дублирования.
+    Возвращаем модели с явной стороной (reactant/product)
     """
     candidates: list[tuple[str, str]] = []
     for comp in left:
@@ -314,13 +288,19 @@ async def _collect_models(left: list[str], right: list[str]):
         if key in seen:
             continue
         seen.add(key)
+        
+        # 1. Fetch SDF
         sdf = await _get_sdf_any(comp)
         if not sdf:
             continue
+            
         atoms, bonds = _parse_sdf_atoms_and_bonds(sdf)
         
-        # Также получаем компоненты для корректного разделения молекул
+        # компоненты для корректного разделения молекул
         _, molecules = _parse_sdf_atoms_and_components(sdf)
+        
+        # 2. Fetch Properties
+        props = await pubchem.fetch_compound_properties(comp)
         
         models.append(
             {
@@ -330,14 +310,15 @@ async def _collect_models(left: list[str], right: list[str]):
                 "atoms": atoms,
                 "bonds": bonds,
                 "molecules": molecules,
-                "source": "PubChem",
+                "source": "PubChem" if props else "Internal/Generated",
                 "side": side,
+                "properties": props  # Add properties here
             }
         )
     return models
 
 def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30):
-    """Генерирует кадры анимации с глобальным сопоставлением атомов и связей."""
+    """Кадры анимации с сопоставлением атомов и связей."""
     
     def _flatten_models(models_list, side_start_x, coeffs_map, duplicate=False):
         all_atoms = []
@@ -351,14 +332,11 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
             except:
                 count = 1
             
-            # Если duplicate=False, рисуем только одну молекулу
             actual_count = count if duplicate else 1
             
             centered_atoms = _center_molecule(m["atoms"])
             
             for c in range(actual_count):
-                # Смещаем молекулы, чтобы они не накладывались друг на друга
-                # Если их много, выстраиваем в сетку
                 shift_x = side_start_x + mol_idx_offset * 8.0
                 shift_y = (c % 3) * 4.0 - 4.0 if actual_count > 1 else 0
                 shift_z = (c // 3) * 4.0 - 4.0 if actual_count > 1 else 0
@@ -374,7 +352,8 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
                         "mol_idx": mol_idx_offset,
                         "compound": m["compound"],
                         "label": f"{count}{m['compound']}" if count > 1 else m["compound"],
-                        "_orig_idx": atom_global_offset + i
+                        "_orig_idx": atom_global_offset + i,
+                        "opacity": 1.0
                     })
                 
                 for b in m.get("bonds", []):
@@ -387,11 +366,11 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
                 
         return all_atoms, all_bonds
 
-    # Для мёрфинга используем полное количество молекул (duplicate=True)
+    # Для мёрфинга используем полное количество молекул
     r_atoms, r_bonds = _flatten_models(reactant_models, -7.0, left_coeffs, duplicate=True)
     p_atoms, p_bonds = _flatten_models(product_models, 7.0, right_coeffs, duplicate=True)
     
-    # Для статических кадров (первый и последний) создаем версии с одной молекулой
+    # первый и последний кадр
     r_atoms_single, r_bonds_single = _flatten_models(reactant_models, -7.0, left_coeffs, duplicate=False)
     p_atoms_single, p_bonds_single = _flatten_models(product_models, 7.0, right_coeffs, duplicate=False)
 
@@ -399,8 +378,7 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
     matched, r_rem, p_rem = _match_atoms(r_atoms, p_atoms)
     
     frames = []
-    # Добавляем специальный кадр в начало для режима "Реагенты" (одиночные молекулы)
-    # Мы пометим его, чтобы фронтенд знал
+    # Добавляем специальный кадр в начало для режима "Реагенты"
     reactant_static_frame = {
         'title': 'Реагенты',
         'atoms': r_atoms_single,
@@ -425,12 +403,10 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
         r_to_frame = {}
         p_to_frame = {}
         
-        # 1. Сопоставленные атомы (движутся и меняют владельца)
         for r_at, p_at in matched:
             idx = len(frame_atoms)
             at = interpolate_coords(r_at, p_at, t_smooth)
             at['opacity'] = 1.0
-            # Передаем mol_idx и название соединения в зависимости от прогресса
             at['mol_idx'] = r_at['mol_idx'] if t < 0.5 else p_at['mol_idx']
             at['compound'] = r_at['compound'] if t < 0.5 else p_at['compound']
             at['label'] = r_at.get('label', r_at['compound']) if t < 0.5 else p_at.get('label', p_at['compound'])
@@ -438,27 +414,24 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
             r_to_frame[r_at["_orig_idx"]] = idx
             p_to_frame[p_at["_orig_idx"]] = idx
 
-        # 2. Лишние реагенты (исчезают)
         for r_at in r_rem:
             idx = len(frame_atoms)
             at = {**r_at}
             at['opacity'] = 1.0 - t_smooth
-            at['z'] = r_at['z'] - t_smooth * 3 # Улетают вглубь
+            at['z'] = r_at['z'] - t_smooth * 3
             frame_atoms.append(at)
             r_to_frame[r_at["_orig_idx"]] = idx
 
-        # 3. Лишние продукты (появляются)
+
         for p_at in p_rem:
             idx = len(frame_atoms)
             at = {**p_at}
             at['opacity'] = t_smooth
-            at['z'] = p_at['z'] + (1.0 - t_smooth) * 3 # Прилетают из глубины
+            at['z'] = p_at['z'] + (1.0 - t_smooth) * 3
             frame_atoms.append(at)
             p_to_frame[p_at["_orig_idx"]] = idx
             
-        # Сборка связей для текущего кадра
         frame_bonds = []
-        # Связи реагентов (исчезают)
         for b in r_bonds:
             if b["start"] in r_to_frame and b["end"] in r_to_frame:
                 frame_bonds.append({
@@ -466,7 +439,7 @@ def make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs
                     "end": r_to_frame[b["end"]],
                     "opacity": 1.0 - t_smooth
                 })
-        # Связи продуктов (появляются)
+
         for b in p_bonds:
             if b["start"] in p_to_frame and b["end"] in p_to_frame:
                 frame_bonds.append({
@@ -491,7 +464,6 @@ async def simulate_visualize(
     current_user: User = Depends(get_current_user_optional)
 ):
     """Поиск SDF для симулятора по названию или формуле и генерация кадров анимации"""
-    # Сохраняем в историю только для авторизованных
     if current_user:
         existing = db.query(SearchHistory).filter(
             SearchHistory.user_id == current_user.id,
@@ -511,27 +483,32 @@ async def simulate_visualize(
         db.commit()
 
     # Нормализация галогенов: если пользователь ввёл Cl, Br, I, F без индекса 2
-    # заменяем их на молекулярную форму для корректной реакции
     reactants_normalized = re.sub(r"\b(Cl|Br|I|F|H|O|N)\b(?!\d)", r"\g<1>2", reactants)
-    print(f"[simulate-visualize] Input: {reactants}, Normalized: {reactants_normalized}")
 
     raw_equation = ""
     
-    # ПРОВЕРКА ФОЛБЭКА (без Ollama)
     fallback_key = "+".join(sorted(reactants_normalized.upper().replace(" ", "").split("+")))
     if hasattr(sim, 'SIMULATOR_FALLBACKS') and fallback_key in sim.SIMULATOR_FALLBACKS:
-        print(f"[simulate-visualize] Using fallback for {reactants_normalized}")
         raw_equation = sim.SIMULATOR_FALLBACKS[fallback_key]
     else:
         try:
             raw_equation = await sim._generate_reaction(reactants_normalized)
-            try:
-                print(f"[simulate-visualize][ollama_raw]: {raw_equation}")
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"[simulate-visualize] Ollama failed: {e}")
+        except Exception:
             pass
+
+    if raw_equation == "NO_REACTION":
+        return {
+            "reactants": reactants,
+            "equation": "",
+            "raw_equation": "NO_REACTION",
+            "info": {},
+            "model": None,
+            "model_error": "Реакция не идет или невозможна",
+            "frames": [],
+            "reactant_static": None,
+            "product_static": None,
+            "models": [],
+        }
 
     if not raw_equation:
         raise HTTPException(
@@ -539,16 +516,14 @@ async def simulate_visualize(
             detail="Не удалось получить уравнение реакции. Проверьте, что Ollama запущена.",
         )
 
-    # Применяем защитные фильтры для исправления известных ошибок модели
+    # Применяем защитные фильтры для исправления ошибок модели
     input_elements = set(re.findall(r"[A-Z][a-z]?", reactants_normalized))
     raw_equation = sim.apply_safety_guards(raw_equation, input_elements)
 
-    # Балансируем и разбираем уравнение с максимально мягким фолбэком
     try:
         balanced = sim.balance_equation(raw_equation)  # type: ignore[attr-defined]
-    except Exception as exc:
+    except Exception:
         balanced = raw_equation
-        print(f"[simulate-visualize] balance failed, using raw: {exc}")
 
     def _fallback_split(eq: str):
         tmp = re.sub(r"[→↔⇒]", "->", eq)
@@ -566,23 +541,16 @@ async def simulate_visualize(
     try:
         left, right = sim._split_equation(balanced)  # type: ignore[attr-defined]
         left_raw, right_raw = re.split(r"->|→", balanced)
-        try:
-            print(f"[simulate-visualize][balanced]: {balanced}")
-        except Exception:
-            pass
-    except Exception as exc:
-        print(f"[simulate-visualize] split failed, fallback: {exc}")
+    except Exception:
         left, right, left_raw, right_raw = _fallback_split(balanced)
 
-    # если всё ещё пусто — пробуем raw_equation
+    # если всё ещё пусто
     if not left or not right:
         left, right, left_raw, right_raw = _fallback_split(raw_equation)
-        # Если fallback сработал, пересобираем balanced для фронта
         if left and right:
             balanced = f"{left_raw} → {right_raw}"
 
     if not left or not right:
-        # если совсем ничего не разобрали — вернём сырые строки
         left = [raw_equation] if raw_equation else []
         right = []
         model_error = "Не удалось разобрать уравнение, показано как есть."
@@ -595,11 +563,8 @@ async def simulate_visualize(
         "элементов": len({el for comp in left + right for el in sim._parse_formula(comp)}),  # type: ignore[attr-defined]
     }
 
-    # выбираем первую доступную молекулу, для которой найдём SDF
     models = await _collect_models(left, right)
-    print(f"[simulate-visualize] Collected {len(models)} models")
 
-    # формируем кадры: реагенты -> переход -> продукты
     reactant_models = [m for m in models if m["side"] == "reactant"]
     product_models = [m for m in models if m["side"] == "product"]
 
@@ -612,11 +577,9 @@ async def simulate_visualize(
     
     if reactant_models and product_models:
         frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30)
-        print(f"[simulate-visualize] Generated {len(frames)} animation frames")
     else:
         model_error = "Не удалось получить 3D данные из PubChem ни для продуктов, ни для реагентов."
 
-    # Убеждаемся, что уравнение всегда есть
     if not balanced or balanced.strip() == "→":
         balanced = f"{' + '.join(left)} → {' + '.join(right)}" if left and right else raw_equation
 
@@ -682,4 +645,3 @@ async def delete_simulate_history(
     db.delete(item)
     db.commit()
     return {"status": "deleted"}
-

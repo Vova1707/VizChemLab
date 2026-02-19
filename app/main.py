@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1.endpoints import auth, pages, visualizator, simiulator, simiulator_visualizator, sessions
+from app.api.v1.endpoints import auth, pages, visualizator, simiulator, simiulator_visualizator, sessions, social
 
 from app.db.base import Base
 from app.db.session import engine
@@ -43,6 +43,7 @@ app.include_router(visualizator.router)
 app.include_router(simiulator.router)
 app.include_router(simiulator_visualizator.router)
 app.include_router(sessions.router)
+app.include_router(social.router, prefix="/api", tags=["Social"])
 
 if __name__ == "__main__":
     import uvicorn

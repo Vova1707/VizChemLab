@@ -1,18 +1,14 @@
 from fastapi import APIRouter, Request, Form, Depends, BackgroundTasks, Body, Response
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.encoders import jsonable_encoder
-from fastapi import status
+
 
 from sqlalchemy.orm import Session
 
 from passlib.context import CryptContext
-
 from app.db.session import get_db
 from app.db.models import User
-
-from app.core.session_store import active_sessions
-from app.core.security import get_password_hash, verify_password, generate_verification_token
+from app.core.security import get_password_hash, verify_password, generate_verification_token, generate_password_reset_token, verify_password_reset_token
 
 from app.utils.email import send_verification_email, send_reset_password_email
 
@@ -54,7 +50,7 @@ async def register(
     background_tasks.add_task(send_verification_email, email, token)
 
     return HTMLResponse(
-        content="<h2>Регистрация успешна!</h2><p>Проверьте почту для подтверждения регистрации.</p><a href='/'>← На главную</a>"
+        content="<h2>Регистрация успешна!</h2><p>Проверьте почту для подтверждения регистрации.</p><a href='/'>На главную</a>"
     )
 
 
@@ -116,8 +112,6 @@ def logout(request: Request):
 
 
 
-from app.core.security import generate_password_reset_token, verify_password_reset_token
-
 @router.get("/forgot-password", response_class=HTMLResponse)
 def forgot_password_page(request: Request):
     return templates.TemplateResponse("auth/forgot_password.html", {"request": request})
@@ -156,7 +150,6 @@ def reset_password(
     new_password: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    print
     email = verify_password_reset_token(token)
     if not email:
         return templates.TemplateResponse("auth/return_login.html", {"request": request, "text": "Ссылка недействительна"})
@@ -177,62 +170,48 @@ async def api_register(
     username: str = Body(...),
     email: str = Body(...),
     password: str = Body(...),
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    logger = logging.getLogger(__name__)
     if db.query(User).filter(User.email == email).first():
-        logger.info(f"/api/register: Попытка регистрации с уже существующим email: {email}")
-        return JSONResponse(status_code=400, content={"success": False, "message": "Пользователь уже зарегистрирован"})
+        return JSONResponse(
+            status_code=400, 
+            content={"success": False, "message": "Пользователь с такой почтой уже есть!"}
+        )
+    
     hashed_pw = get_password_hash(password)
-    user = User(username=username, email=email, hashed_password=hashed_pw)
-    db.add(user)
+    new_user = User(username=username, email=email, hashed_password=hashed_pw, is_verified=True)
+    
+    db.add(new_user)
     db.commit()
-    db.refresh(user)
     
-    # Регистрация теперь не отправляет письмо автоматически
-    # token = generate_verification_token(email)
-    # if background_tasks:
-    #     background_tasks.add_task(send_verification_email, email, token)
-    
-    logger.info(f"/api/register: Успешная регистрация {email}")
-    return JSONResponse(content={"success": True, "message": "Регистрация успешна!"})
-
-@router.post("/api/send-verification")
-async def api_send_verification(
-    background_tasks: BackgroundTasks,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if user.is_verified:
-        return JSONResponse({"success": False, "message": "Email уже подтверждён."}, status_code=400)
-    
-    token = generate_verification_token(user.email)
-    background_tasks.add_task(send_verification_email, user.email, token)
-    
-    return {"success": True, "message": "Письмо для подтверждения отправлено."}
+    return JSONResponse(content={"success": True, "message": "Вы успешно зарегистрировались!"})
 
 @router.post("/api/login")
-def api_login(
+async def api_login(
     response: Response,
     email: str = Body(...),
     password: str = Body(...),
     db: Session = Depends(get_db)
 ):
-    logger = logging.getLogger(__name__)
     user = db.query(User).filter(User.email == email).first()
+
     if not user or not verify_password(password, user.hashed_password):
-        logger.info(f"/api/login: Ошибка входа для пользователя {email}")
-        return JSONResponse({"success": False, "message": "Неверный email или пароль."}, status_code=401)
+        return JSONResponse(
+            status_code=401, 
+            content={"success": False, "message": "Неправильная почта или пароль!"}
+        )
+
+    # Запоминаем пользователя через куки
+    res = JSONResponse(content={"success": True, "message": "Вы вошли!"})
+    res.set_cookie(
+        key="session_id", 
+        value=str(user.id), 
+        httponly=True, 
+        samesite="lax", 
+        path="/"
+    )
     
-    # Теперь разрешаем вход без подтвержденной почты
-    # if not user.is_verified:
-    #     logger.info(f"/api/login: Почта не подтверждена для {email}")
-    #     return JSONResponse({"success": False, "message": "Почта не подтверждена."}, status_code=401)
-    
-    response.set_cookie(key="session_id", value=str(user.id), httponly=True, samesite="lax", path="/")
-    logger.info(f"/api/login: Вход выполнен {email}")
-    return {"success": True, "message": "Вход успешен."}
+    return res
 
 @router.post("/api/forgot-password")
 async def api_forgot_password(
@@ -290,13 +269,22 @@ def api_verify_email(token: str, db: Session = Depends(get_db)):
     return {"success": True, "message": "Email успешно подтверждён!"}
 
 @router.get("/api/me")
-def get_me(user: User = Depends(get_current_user_optional)):
+async def api_me(user: User = Depends(get_current_user_optional)):
     if not user:
-        return None
-    return {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "is_verified": user.is_verified,
-        "is_admin": user.is_admin
-    }
+        return JSONResponse(content={"success": False, "user": None})
+    
+    return JSONResponse(content={
+        "success": True, 
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_verified": user.is_verified
+        }
+    })
+
+@router.post("/api/logout")
+async def api_logout():
+    res = JSONResponse(content={"success": True, "message": "Вы вышли из аккаунта"})
+    res.delete_cookie("session_id", path="/")
+    return res

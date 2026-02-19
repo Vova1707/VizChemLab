@@ -1,15 +1,18 @@
 from sqlalchemy.orm import Session
 from app.db.models import Element, BondType
 from app.db.session import SessionLocal
+import logging
+
+# Настраиваем базовое логирование, если оно еще не настроено
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def seed_db():
     db: Session = SessionLocal()
     try:
-        # Check if already seeded
         if db.query(BondType).first():
-            print("Database already seeded with BondTypes.")
+            logger.info("Database already seeded with BondTypes.")
         else:
-            # Bond types
             bond_types = [
                 BondType(id=1, label='Одинарная', value=1, color='#6b7280', style='solid'),
                 BondType(id=2, label='Двойная', value=2, color='#4b5563', style='double'),
@@ -18,10 +21,10 @@ def seed_db():
                 BondType(id=5, label='Штрих (Вниз)', value=1, color='#6b7280', style='dash'),
             ]
             db.add_all(bond_types)
-            print("BondTypes seeded.")
+            logger.info("BondTypes seeded.")
 
         if db.query(Element).first():
-            print("Database already seeded with Periodic Table.")
+            logger.info("Database already seeded with Periodic Table.")
         else:
             # Periodic table
             elements = [
@@ -93,12 +96,12 @@ def seed_db():
                 Element(symbol='U', name='Уран', valence=6, color='#008FFF', radius=170, group=3, period=7),
             ]
             db.add_all(elements)
-            print("Periodic Table seeded.")
+            logger.info("Periodic Table seeded.")
         
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Error seeding database: {e}")
+        logger.error(f"Error seeding database: {e}")
     finally:
         db.close()
 

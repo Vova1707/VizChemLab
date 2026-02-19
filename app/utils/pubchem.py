@@ -80,7 +80,7 @@ async def fetch_pubchem_sdf_by_cid(cid: int, record_type: str = "3d") -> str | N
 
 async def fetch_cids_by_formula(formula: str) -> list[int]:
     """Поиск CID по химической формуле. Пробуем fastformula, затем обычный поиск."""
-    # 1. Пробуем fastformula (быстрее)
+    #Пробуем fastformula
     fast_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{quote(formula)}/cids/JSON?MaxRecords=40"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -91,12 +91,9 @@ async def fetch_cids_by_formula(formula: str) -> list[int]:
                 if cids:
                     return cids
     except Exception as e:
-        # В оригинальном коде нет logger, но в инструкции по замене он использовался.
-        # Сохраняем структуру замены, но убираем обращения к несуществующему logger или оставляем pass,
-        # если logger не импортирован. Однако, следуя логике исправления блока:
         pass
 
-    # 2. Если не нашли, пробуем обычный поиск по формуле
+    #Если не нашли, пробуем обычный поиск по формуле
     formula_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/formula/{quote(formula)}/cids/JSON?MaxRecords=40"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -115,15 +112,66 @@ async def fetch_pubchem_sdf_by_formula(formula: str, record_type: str = "3d") ->
     if not cids:
         return None
     
-    # Пытаемся получить 3D для первого CID
     sdf = await fetch_pubchem_sdf_by_cid(cids[0], record_type=record_type)
     if sdf:
         return sdf
-        
-    # Если 3D не нашли и просили 3D, пробуем 2D как запасной вариант
     if record_type == "3d":
         return await fetch_pubchem_sdf_by_cid(cids[0], record_type="2d")
         
+    return None
+
+async def fetch_compound_properties(query: str) -> dict | None:
+    """
+    Получить свойства соединения (вес, формулу, имя) по названию или формуле.
+    """
+    # Сначала пытаемся найти CID
+    cids = await fetch_cids_by_formula(query)
+    if not cids:
+        # Если не нашли по формуле, пробуем по имени (хотя fetch_cids_by_formula ищет и то и то частично)
+        # Но для надежности можно попробовать поиск по имени, если это не формула
+        pass
+
+    cid = cids[0] if cids else None
+    
+    # Если CID не найден через формулу, попробуем через имя (PugREST name)
+    if not cid:
+         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{quote(query)}/cids/JSON"
+         try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url)
+                if r.status_code == 200:
+                    data = r.json()
+                    found_cids = data.get("IdentifierList", {}).get("CID", [])
+                    if found_cids:
+                        cid = found_cids[0]
+         except Exception:
+             pass
+
+    if not cid:
+        return None
+
+    # Теперь получаем свойства по CID
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularWeight,MolecularFormula,IUPACName,Title/JSON"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url)
+            if r.status_code == 200:
+                data = r.json()
+                props = data.get("PropertyTable", {}).get("Properties", [{}])[0]
+                
+                # Переводим название
+                name_en = props.get("Title") or props.get("IUPACName")
+                name_ru = await _translate_to_ru(name_en)
+                
+                return {
+                    "cid": cid,
+                    "formula": props.get("MolecularFormula"),
+                    "weight": props.get("MolecularWeight"),
+                    "name": name_ru,
+                    "name_en": name_en
+                }
+    except Exception:
+        pass
     return None
 
 async def fetch_compound_names(cids: list[int]) -> list[dict]:
@@ -176,13 +224,11 @@ async def get_sdf_any(compound: str) -> str | None:
     trans = await _maybe_translate_to_en(compound)
     query = trans or compound
     
-    # 1. Пробуем как название (3D, затем 2D)
     for rt in ["3d", "2d"]:
         sdf = await fetch_pubchem_sdf_by_name(query, record_type=rt)
         if sdf:
             return sdf
             
-    # 2. Пробуем как формулу (3D, затем 2D)
     for rt in ["3d", "2d"]:
         sdf = await fetch_pubchem_sdf_by_formula(query, record_type=rt)
         if sdf:

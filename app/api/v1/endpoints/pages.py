@@ -1,15 +1,12 @@
-from fastapi import APIRouter, Request, Depends, Body
+from fastapi import APIRouter, Request, Depends
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import User, Element, BondType
 
 from app.core.session_store import active_sessions
-from app.core.config import settings
-import httpx
 import logging
-import json
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -18,21 +15,10 @@ logger = logging.getLogger(__name__)
 
 @router.get("/api/constants")
 def get_constants(db: Session = Depends(get_db)):
-    # Исправляем радиусы H и He согласно научным данным (He > H для ковалентных/эмпирических в некоторых моделях)
-    # По желанию пользователя: H должен быть меньше He
-    h = db.query(Element).filter(Element.symbol == 'H').first()
-    if h and h.radius != 25:
-        h.radius = 25
-        db.commit()
-    he = db.query(Element).filter(Element.symbol == 'He').first()
-    if he and he.radius != 31:
-        he.radius = 31
-        db.commit()
 
     elements = db.query(Element).order_by(Element.id).all()
     bond_types = db.query(BondType).order_by(BondType.id).all()
     
-    # Если база пуста, наполняем её начальными данными
     if not elements:
         initial_elements = [
             Element(symbol='H', name='Водород', valence=1, color='#FFFFFF', radius=25, group=1, period=1),
@@ -125,7 +111,7 @@ def get_constants(db: Session = Depends(get_db)):
                 "name": e.name,
                 "valence": e.valence,
                 "color": e.color,
-                "radius": e.radius / 100.0, # Превращаем в те же единицы, что были на фронте
+                "radius": e.radius / 100.0, 
                 "group": e.group,
                 "period": e.period
             } for e in elements

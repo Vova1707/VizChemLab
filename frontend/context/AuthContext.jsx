@@ -7,17 +7,18 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Проверяем, вошел ли пользователь
   const checkAuth = async () => {
-    setLoading(true);
     try {
-      const resp = await fetch('/api/me', { credentials: 'include' });
-      if (resp.ok) {
-        const data = await resp.json();
-        setUser(data);
+      const response = await fetch('/api/me');
+      const data = await response.json();
+      
+      if (data.success) {
+        setUser(data.user);
       } else {
         setUser(null);
       }
-    } catch (error) {
+    } catch (err) {
       setUser(null);
     } finally {
       setLoading(false);
@@ -29,61 +30,44 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const resp = await fetch('/api/login', {
+    const response = await fetch('/api/login', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    const data = await resp.json();
-    if (!data.success) {
-      throw new Error(data.message || 'Ошибка входа');
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      await checkAuth();
+      return data;
+    } else {
+      throw new Error(data.message || 'Не удалось войти.');
     }
-    await checkAuth();
-    return data;
-  };
-
-  const register = async (username, email, password) => {
-    await fetch('/api/register', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
-    });
   };
 
   const logout = async () => {
-    try {
-      await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include'
-      });
-    } catch {}
+    await fetch('/api/logout', { method: 'POST' });
     setUser(null);
   };
 
-  const sendVerification = async () => {
-    try {
-      const resp = await fetch('/api/send-verification', {
-        method: 'POST',
-        credentials: 'include'
-      });
-      return await resp.json();
-    } catch (error) {
-      return { success: false, message: 'Ошибка сети' };
-    }
-  };
-
+  // Если всё еще грузимся, показываем надпись
   if (loading) {
     return (
       <div style={{ 
-        display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#6b7280', fontFamily: 'var(--font-family)'
-      }}>Загрузка...</div>
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh', 
+        color: '#6b7280'
+      }}>
+        Подождите, загружаем...
+      </div>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, sendVerification, loading, checkAuth }}>
+    <AuthContext.Provider value={{ user, login, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

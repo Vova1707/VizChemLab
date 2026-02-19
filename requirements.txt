@@ -3,7 +3,7 @@ uvicorn
 sqlalchemy
 alembic
 python-dotenv
-psycopg2
+psycopg2-binary
 passlib[bcrypt]
 jinja2
 python-multipart
@@ -13,3 +13,4 @@ email-validator
 aiosmtplib
 itsdangerous
 httpx
+numpy

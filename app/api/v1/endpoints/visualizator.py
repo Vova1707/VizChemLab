@@ -20,11 +20,9 @@ async def lookup_formula(
     current_user: User = Depends(get_current_user_optional)
 ):
     """Поиск SDF по химической формуле"""
-    # fetch_pubchem_sdf_by_formula сам пробует 3D, затем 2D
     sdf = await pubchem.fetch_pubchem_sdf_by_formula(formula, record_type="3d")
     
     if not sdf:
-        # Попробуем еще раз как название
         sdf = await pubchem.fetch_pubchem_sdf_by_name(formula, record_type="3d")
         if not sdf:
             sdf = await pubchem.fetch_pubchem_sdf_by_name(formula, record_type="2d")
@@ -41,7 +39,6 @@ async def visualize_compound(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
-    # Сохраняем в историю только если пользователь авторизован
     if current_user:
         existing = db.query(SearchHistory).filter(
             SearchHistory.user_id == current_user.id,
@@ -60,21 +57,36 @@ async def visualize_compound(
             db.add(new_history)
         db.commit()
 
-    # 1. Пробуем найти как название
     trans = await pubchem._maybe_translate_to_en(compound)
-    query = trans or compound
     
-    for rt in ["3d", "2d"]:
-        sdf = await pubchem.fetch_pubchem_sdf_by_name(query, record_type=rt)
-        if sdf:
-            return {
-                "compound": compound,
-                "source": "PubChem",
-                "format": "sdf",
-                "data": sdf,
-            }
+    candidates = []
+    if trans:
+        candidates.append(trans)
+        # Эвристики для исправления ошибок перевода химических названий
+        if 'g' in trans:
+             candidates.append(trans.replace('g', 'h'))
+        if 'll' in trans:
+             candidates.append(trans.replace('ll', 'l'))
+        if 'g' in trans and 'll' in trans:
+             candidates.append(trans.replace('g', 'h').replace('ll', 'l'))
+    
+    candidates.append(compound)
+    # Удаляем дубликаты сохраняя порядок
+    candidates = list(dict.fromkeys([c for c in candidates if c]))
 
-    # 2. Если не нашли как название, проверяем, не формула ли это
+    for cand in candidates:
+        for rt in ["3d", "2d"]:
+            sdf = await pubchem.fetch_pubchem_sdf_by_name(cand, record_type=rt)
+            if sdf:
+                return {
+                    "compound": compound,
+                    "source": "PubChem",
+                    "format": "sdf",
+                    "data": sdf,
+                }
+
+    query = trans or compound
+
     is_likely_formula = bool(re.match(r"^([A-Z][a-z]?\d*)+$", query, re.IGNORECASE))
     if is_likely_formula:
         formula_query = query.upper()
@@ -132,18 +144,36 @@ async def search_compound(
 ):
     """Поиск соединений по названию или формуле (для выпадающего списка)"""
     trans = await pubchem._maybe_translate_to_en(query)
-    search_query = trans or query
     
-    # 1. CID по названию
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{quote(search_query)}/cids/JSON?MaxRecords=10"
+    candidates = []
+    if trans:
+        candidates.append(trans)
+        if 'g' in trans:
+             candidates.append(trans.replace('g', 'h'))
+        if 'll' in trans:
+             candidates.append(trans.replace('ll', 'l'))
+        if 'g' in trans and 'll' in trans:
+             candidates.append(trans.replace('g', 'h').replace('ll', 'l'))
+    
+    candidates.append(query)
+    candidates = list(dict.fromkeys([c for c in candidates if c]))
+    
     cids = []
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url)
-            if r.status_code == 200:
-                cids = r.json().get("IdentifierList", {}).get("CID", [])
-    except Exception:
-        pass
+    # 1. CID по названию (пробуем варианты)
+    for cand in candidates:
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{quote(cand)}/cids/JSON?MaxRecords=10"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url)
+                if r.status_code == 200:
+                    found = r.json().get("IdentifierList", {}).get("CID", [])
+                    if found:
+                        cids.extend(found)
+                        break
+        except Exception:
+            pass
+
+    search_query = trans or query
         
     # 2. По формуле
     if not cids:

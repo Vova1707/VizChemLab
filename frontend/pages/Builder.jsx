@@ -93,42 +93,45 @@ const Builder = () => {
   }, [fetchedSdf, selectedResultIndex, saveSession]);
 
   // Загрузка констант из БД
-  useEffect(() => {
-    const fetchConstants = async () => {
-      try {
-        const response = await fetch('/api/constants');
-        const data = await response.json();
-        setPeriodicTable(data.periodic_table);
-        
-        // Добавляем стерео-связи вручную, если их нет в БД
-        const baseBondTypes = data.bond_types.filter((v, i, a) => a.findIndex(t => t.label === v.label) === i);
-        const extendedBondTypes = [...baseBondTypes];
-        
-        if (!extendedBondTypes.find(t => t.style === 'wedge')) {
-          extendedBondTypes.push({ label: 'Передняя', value: 1, style: 'wedge', color: '#fff' });
-        }
-        if (!extendedBondTypes.find(t => t.style === 'dash')) {
-          extendedBondTypes.push({ label: 'Задняя', value: 1, style: 'dash', color: '#fff' });
-        }
-        
-        setBondTypes(extendedBondTypes);
-        
-        // Устанавливаем значения по умолчанию после загрузки
-        if (data.periodic_table.length > 0) {
-          const carbon = data.periodic_table.find(e => e.symbol === 'C') || data.periodic_table[0];
-          setSelectedElement(carbon);
-        }
-        if (extendedBondTypes.length > 0) {
-          setSelectedBondType(extendedBondTypes[0]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch constants:', error);
-      } finally {
-        setIsLoadingConstants(false);
+  const loadConstants = useCallback(async () => {
+    setIsLoadingConstants(true);
+    try {
+      const response = await fetch('/api/constants');
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      setPeriodicTable(data.periodic_table);
+      
+      // Добавляем стерео-связи вручную, если их нет в БД
+      const baseBondTypes = data.bond_types.filter((v, i, a) => a.findIndex(t => t.label === v.label) === i);
+      const extendedBondTypes = [...baseBondTypes];
+      
+      if (!extendedBondTypes.find(t => t.style === 'wedge')) {
+        extendedBondTypes.push({ label: 'Передняя', value: 1, style: 'wedge', color: '#fff' });
       }
-    };
-    fetchConstants();
+      if (!extendedBondTypes.find(t => t.style === 'dash')) {
+        extendedBondTypes.push({ label: 'Задняя', value: 1, style: 'dash', color: '#fff' });
+      }
+      
+      setBondTypes(extendedBondTypes);
+      
+      // Устанавливаем значения по умолчанию после загрузки
+      if (data.periodic_table.length > 0) {
+        const carbon = data.periodic_table.find(e => e.symbol === 'C') || data.periodic_table[0];
+        setSelectedElement(carbon);
+      }
+      if (extendedBondTypes.length > 0) {
+        setSelectedBondType(extendedBondTypes[0]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch constants:', error);
+    } finally {
+      setIsLoadingConstants(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadConstants();
+  }, [loadConstants]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [draggedAtomId, setDraggedAtomId] = useState(null);
@@ -693,31 +696,14 @@ const Builder = () => {
   }
 
   return (
-    <div className="container" style={{ padding: '20px 40px', maxWidth: '1400px', margin: '0 auto' }}>
-      <div className="glass-card" style={{ 
-        padding: '24px', 
-        minHeight: 'calc(100vh - 120px)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '24px',
-        borderRadius: 'var(--radius)',
-        border: '1px solid var(--border)',
-        marginTop: '20px'
-      }}>
+    <div className="builder-container">
+      <div className="glass-card builder-layout">
         <div style={{ display: 'flex', gap: '24px', flex: 1 }}>
           {/* Панель инструментов */}
           <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="glass-card" style={{ 
-              padding: '20px', 
-              background: 'rgba(255,255,255,0.03)', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '16px',
-              borderRadius: '20px',
-              border: '1px solid var(--border)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+            <div className="glass-card tool-panel">
+              <div className="tool-header">
+                <h3 className="tool-title">
                   Элемент
                 </h3>
                 <span style={{ 
@@ -737,27 +723,17 @@ const Builder = () => {
                 placeholder="Поиск элемента..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  padding: '10px 14px', 
-                  borderRadius: '10px', 
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-body)',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem'
-                }}
+                className="search-input"
               />
 
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(4, 1fr)', 
-                gap: '8px', 
-                maxHeight: '300px', 
-                overflowY: 'auto',
-                paddingRight: '4px'
-              }}>
+              <div className="element-grid">
                 {isLoadingConstants ? (
                   <div style={{ gridColumn: 'span 4', textAlign: 'center', padding: '20px', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Загрузка элементов...</div>
+                ) : periodicTable.length === 0 ? (
+                    <div style={{ gridColumn: 'span 4', textAlign: 'center', padding: '10px' }}>
+                        <p style={{fontSize: '0.8rem', color: 'var(--error)', margin: '0 0 8px'}}>Ошибка загрузки</p>
+                        <button onClick={loadConstants} className="btn btn-sm btn-secondary">Повторить</button>
+                    </div>
                 ) : filteredElements.map(el => (
                   <button
                     key={el.symbol}
@@ -767,20 +743,11 @@ const Builder = () => {
                       setSelectedAtomId(null);
                       setActiveTool('atom');
                     }}
+                    className="element-btn"
                     style={{
-                      aspectRatio: '1',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: '10px',
                       border: `2px solid ${selectedElement?.symbol === el.symbol ? 'var(--primary)' : 'transparent'}`,
                       background: el.color,
                       color: ['H', 'Li', 'Be', 'B', 'Al', 'K', 'Ca', 'Sc', 'Ag', 'Cd', 'In', 'Sn', 'Ba', 'La', 'Ce', 'Pt', 'Au', 'Hg'].includes(el.symbol) ? '#000' : '#fff',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       boxShadow: selectedElement?.symbol === el.symbol ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none',
                       transform: selectedElement?.symbol === el.symbol ? 'scale(1.05)' : 'scale(1)'
                     }}
@@ -792,21 +759,9 @@ const Builder = () => {
               </div>
             </div>
 
-            <div className="glass-card" style={{ 
-              padding: '20px', 
-              background: 'rgba(255,255,255,0.03)',
-              borderRadius: '20px',
-              border: '1px solid var(--border)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ 
-                  fontSize: '0.9rem', 
-                  fontWeight: '700', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.05em', 
-                  color: 'var(--text-secondary)',
-                  margin: 0
-                }}>
+            <div className="glass-card tool-panel">
+              <div className="tool-header">
+                <h3 className="tool-title">
                   Инструменты
                 </h3>
               </div>
@@ -814,14 +769,8 @@ const Builder = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
                 <button 
                   onClick={() => { setActiveTool('atom'); setIsEraserMode(false); setSelectedAtomId(null); }}
-                  className={`btn btn-sm ${activeTool === 'atom' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-sm tool-btn ${activeTool === 'atom' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
-                    borderRadius: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: '60px',
-                    gap: '4px',
-                    transition: 'all 0.2s ease',
                     border: activeTool === 'atom' && !isEraserMode ? 'none' : '1px solid var(--border)'
                   }}
                 >
@@ -830,14 +779,8 @@ const Builder = () => {
                 </button>
                 <button 
                   onClick={() => { setActiveTool('bond'); setIsEraserMode(false); setSelectedAtomId(null); }}
-                  className={`btn btn-sm ${activeTool === 'bond' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-sm tool-btn ${activeTool === 'bond' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
-                    borderRadius: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: '60px',
-                    gap: '4px',
-                    transition: 'all 0.2s ease',
                     border: activeTool === 'bond' && !isEraserMode ? 'none' : '1px solid var(--border)'
                   }}
                 >
@@ -857,19 +800,10 @@ const Builder = () => {
                       setIsEraserMode(false);
                       setActiveTool('bond');
                     }}
+                    className="bond-btn"
                     style={{ 
-                      padding: '10px 6px', 
-                      fontSize: '0.75rem',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                      background: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? 'var(--primary)' : 'var(--bg-secondary)',
                       color: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? '#fff' : 'var(--text-main)',
-                      border: '1px solid var(--border)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
                     }}
                   >
                     <div style={{ height: '20px', display: 'flex', alignItems: 'center' }}>
@@ -901,16 +835,9 @@ const Builder = () => {
                   if (!isEraserMode) setActiveTool('eraser');
                   else setActiveTool('atom');
                 }}
-                className={`btn ${isEraserMode ? 'btn-danger' : 'btn-secondary'}`}
+                className={`btn eraser-btn ${isEraserMode ? 'btn-danger' : 'btn-secondary'}`}
                 style={{ 
-                  padding: '12px', 
-                  fontSize: '0.85rem',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  background: isEraserMode ? 'var(--error)' : 'rgba(255,255,255,0.03)',
+                  background: isEraserMode ? 'var(--error)' : 'var(--bg-secondary)',
                   color: isEraserMode ? '#fff' : 'var(--text-main)',
                   border: isEraserMode ? 'none' : '1px solid var(--border)',
                   boxShadow: isEraserMode ? '0 4px 12px rgba(239, 68, 68, 0.3)' : 'none'
@@ -951,7 +878,7 @@ const Builder = () => {
                   padding: '12px',
                   borderRadius: '14px',
                   fontWeight: '600',
-                  background: 'rgba(255,255,255,0.03)',
+                  background: 'var(--bg-secondary)',
                   border: '1px solid var(--border)',
                   transition: 'all 0.2s ease'
                 }}
@@ -973,7 +900,7 @@ const Builder = () => {
               <div className="glass-card" style={{ 
                 flex: 1,
                 padding: '6px', 
-                background: 'rgba(255,255,255,0.03)',
+                background: 'var(--bg-secondary)',
                 borderRadius: '24px',
                 border: '1px solid var(--border)',
                 display: 'flex',
@@ -1007,16 +934,16 @@ const Builder = () => {
                       if (tab !== '2D') setIsSplitView(false);
                     }}
                     onMouseEnter={(e) => {
-                      if (activeTab !== tab) e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
+                      if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-main)';
                     }}
                     onMouseLeave={(e) => {
-                      if (activeTab !== tab) e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                      if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-secondary)';
                     }}
                     style={{
                       flex: 1,
                       border: 'none',
                       background: 'transparent',
-                      color: activeTab === tab ? '#fff' : 'rgba(255,255,255,0.4)',
+                      color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
                       fontWeight: '800',
                       fontSize: '0.85rem',
                       cursor: (tab === 'DB' && !fetchedSdf) ? 'not-allowed' : 'pointer',
@@ -1113,7 +1040,7 @@ const Builder = () => {
                         />
                         <text 
                           x={minX} y={minY - 30} 
-                          fill="rgba(255,255,255,0.4)" 
+                          fill="var(--text-secondary)" 
                           fontSize="10" 
                           fontWeight="600"
                         >
@@ -1326,9 +1253,9 @@ const Builder = () => {
                             }}
                             style={{
                               padding: '12px',
-                              background: selectedResultIndex === idx ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.05)',
+                              background: selectedResultIndex === idx ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)',
                               borderRadius: '12px',
-                              border: selectedResultIndex === idx ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.1)',
+                              border: selectedResultIndex === idx ? '1px solid var(--primary)' : '1px solid var(--border)',
                               display: 'flex',
                               flexDirection: 'column',
                               gap: '6px',
@@ -1340,19 +1267,19 @@ const Builder = () => {
                             }}
                             onMouseOver={(e) => {
                               if (selectedResultIndex !== idx) {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                                e.currentTarget.style.background = 'var(--border)';
+                                e.currentTarget.style.borderColor = 'var(--text-secondary)';
                               }
                             }}
                             onMouseOut={(e) => {
                               if (selectedResultIndex !== idx) {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                                e.currentTarget.style.background = 'var(--bg-secondary)';
+                                e.currentTarget.style.borderColor = 'var(--border)';
                               }
                             }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: '700', color: '#fff', fontSize: '0.9rem' }}>{res.formula || 'Molecule'}</span>
+                              <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>{res.formula || 'Molecule'}</span>
                               <span style={{ 
                                 fontSize: '0.6rem', 
                                 padding: '2px 6px', 
