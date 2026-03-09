@@ -175,7 +175,7 @@ const Visualizer = () => {
       const resp = await fetch('/api/visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ compound: query.trim() }),
+        body: JSON.stringify({ chemical_name: query.trim() }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Ошибка API');
