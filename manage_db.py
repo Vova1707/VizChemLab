@@ -38,5 +38,5 @@ if __name__ == "__main__":
     elif args.command == "seed":
         seed()
     elif args.command == "setup":
-        run_migrations()
+        # run_migrations()
         seed()
