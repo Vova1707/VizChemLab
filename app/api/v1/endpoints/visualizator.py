@@ -35,10 +35,11 @@ async def lookup_formula(
 
 @router.post("/api/visualize")
 async def visualize_compound(
-    compound: str = Body(..., embed=True),
+    request: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
+    compound = request.get('formula', request.get('compound', ''))
     if current_user and compound and compound.strip():
         existing = db.query(SearchHistory).filter(
             SearchHistory.user_id == current_user.id,

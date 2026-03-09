@@ -83,11 +83,49 @@ const Simulator = () => {
   };
 
   const getRadiusByElement = (el) => {
-    const found = periodicTable.find(e => e.symbol === el);
-    // В базе радиус в pm, переводим в Ангстремы (делим на 100)
-    // Проверяем, что радиус валидный (не null, не undefined, не 0)
-    const dbRadius = (found && found.radius) ? found.radius / 100 : null;
-    return dbRadius || (ATOMIC_RADII[el] || 0.8) * 0.8;
+    // Базовые радиусы для наглядности - сделаем их очень разными
+    const baseRadii = {
+      'H': 0.25,  // Водород - самый маленький
+      'C': 0.50,  // Углерод - средний
+      'N': 0.45,  // Азот - чуть меньше углерода
+      'O': 0.40,  // Кислород - еще меньше
+      'F': 0.35,  // Фтор - маленький
+      'Cl': 0.70, // Хлор - большой
+      'Br': 0.80, // Бром - очень большой
+      'I': 0.90,  // Иод - огромный
+      'S': 0.60,  // Сера - большая
+      'P': 0.55,  // Фосфор - средне-большой
+      'Na': 0.75, // Натрий - большой
+      'K': 0.85,  // Калий - очень большой
+      'Mg': 0.65, // Магний - большой
+      'Ca': 0.75, // Кальций - большой
+      'Fe': 0.70, // Железо - большой
+      'Zn': 0.70, // Цинк - большой
+      'Cu': 0.70, // Медь - большая
+    };
+    
+    // Используем наши контрастные размеры
+    let radius = baseRadii[el];
+    
+    // Если нет в наших размерах, пробуем из базы
+    if (!radius && periodicTable && periodicTable.length > 0) {
+      const found = periodicTable.find(e => e.symbol === el);
+      const dbRadius = (found && found.radius) ? found.radius / 100 : null;
+      if (dbRadius && dbRadius > 0) {
+        radius = dbRadius * 0.6; // Увеличиваем контрастность
+      }
+    }
+    
+    // Если все еще нет, используем ATOMIC_RADII с контрастностью
+    if (!radius) {
+      radius = (ATOMIC_RADII[el] || 0.8) * 0.5;
+    }
+    
+    // Гарантируем минимальный размер
+    if (radius < 0.2) radius = 0.2;
+    if (radius > 1.0) radius = 1.0;
+    
+    return radius;
   };
 
   const [reactants, setReactants] = useState(() => {
