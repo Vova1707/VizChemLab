@@ -24,4 +24,4 @@ EXPOSE 8000
 
 # Command to run the application
 ENV PYTHONPATH=/app
-CMD ["python", "app/main.py"]
+CMD ["sh", "-c", "python manage_db.py setup && python app/main.py"]
