@@ -297,7 +297,7 @@ async def _generate_reaction(reactants: str) -> str:
             "repetition_penalty": 1
         }
 
-        async with httpx.AsyncClient(timeout=120, verify=False) as client:
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             response = await client.post(
                 GIGACHAT_COMPLETIONS_URL,
                 headers=headers,
