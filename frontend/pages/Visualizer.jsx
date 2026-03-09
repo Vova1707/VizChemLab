@@ -16,29 +16,60 @@ const load3Dmol = () =>
 const Visualizer = () => {
   const { user } = useAuth();
   const [molecule, setMolecule] = useState(() => {
-    return localStorage.getItem('visualizer_molecule') || '';
+    return localStorage.getItem('viz_v5_molecule') || 'вода';
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isomers, setIsomers] = useState(() => {
-    const saved = localStorage.getItem('visualizer_isomers');
+    const saved = localStorage.getItem('viz_v5_isomers');
     return saved ? JSON.parse(saved) : [];
   });
   const [history, setHistory] = useState([]);
   const [isomerFilter, setIsomerFilter] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [lastSdf, setLastSdf] = useState(() => {
-    return localStorage.getItem('visualizer_lastSdf');
+    return localStorage.getItem('viz_v5_lastSdf');
   });
   const [isLoaded, setIsLoaded] = useState(false);
   const viewerRef = useRef();
+  const v3dRef = useRef(null);
+
+  // Version control for localStorage
+  useEffect(() => {
+    const STORAGE_VERSION = 'v5';
+    const currentVersion = localStorage.getItem('viz_storage_version');
+    
+    if (currentVersion !== STORAGE_VERSION) {
+      // Clear all visualizer related keys
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('viz_v5_') || key.startsWith('viz_v4_') || key.startsWith('viz_v3_') || key.startsWith('viz_v2_') || key.startsWith('visualizer_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      
+      localStorage.setItem('viz_storage_version', STORAGE_VERSION);
+      
+      // Set defaults
+      setMolecule('вода');
+      setLastSdf(null);
+      setIsomers([]);
+      
+      // Clear viewer
+      if (viewerRef.current) {
+        viewerRef.current.innerHTML = '';
+      }
+    }
+  }, []);
 
   // Сохранение в localStorage и сессию (только после загрузки) с дебаунсом
   useEffect(() => {
     if (!isLoaded) return;
     const timer = setTimeout(() => {
-      localStorage.setItem('visualizer_molecule', molecule);
-      if (user) updateSessionData({ visualizer_molecule: molecule });
+      localStorage.setItem('viz_v5_molecule', molecule);
+      if (user) updateSessionData({ viz_v5_molecule: molecule });
     }, 1000);
     return () => clearTimeout(timer);
   }, [molecule, isLoaded, user]);
@@ -46,8 +77,8 @@ const Visualizer = () => {
   useEffect(() => {
     if (!isLoaded) return;
     const timer = setTimeout(() => {
-      localStorage.setItem('visualizer_isomers', JSON.stringify(isomers));
-      if (user) updateSessionData({ visualizer_isomers: isomers });
+      localStorage.setItem('viz_v5_isomers', JSON.stringify(isomers));
+      if (user) updateSessionData({ viz_v5_isomers: isomers });
     }, 1000);
     return () => clearTimeout(timer);
   }, [isomers, isLoaded, user]);
@@ -56,11 +87,11 @@ const Visualizer = () => {
     if (!isLoaded) return;
     const timer = setTimeout(() => {
       if (lastSdf) {
-        localStorage.setItem('visualizer_lastSdf', lastSdf);
-        if (user) updateSessionData({ visualizer_lastSdf: lastSdf });
+        localStorage.setItem('viz_v5_lastSdf', lastSdf);
+        if (user) updateSessionData({ viz_v5_lastSdf: lastSdf });
       } else {
-        localStorage.removeItem('visualizer_lastSdf');
-        if (user) updateSessionData({ visualizer_lastSdf: null });
+        localStorage.removeItem('viz_v5_lastSdf');
+        if (user) updateSessionData({ viz_v5_lastSdf: null });
       }
     }, 1000);
     return () => clearTimeout(timer);
@@ -72,11 +103,11 @@ const Visualizer = () => {
       try {
         const data = await getSessionData();
         if (data) {
-          if (data.visualizer_molecule) setMolecule(data.visualizer_molecule);
-          if (data.visualizer_isomers) setIsomers(data.visualizer_isomers);
-          if (data.visualizer_lastSdf) {
-            setLastSdf(data.visualizer_lastSdf);
-            setTimeout(() => show3DMol(data.visualizer_lastSdf), 500);
+          if (data.viz_v5_molecule) setMolecule(data.viz_v5_molecule);
+          if (data.viz_v5_isomers) setIsomers(data.viz_v5_isomers);
+          if (data.viz_v5_lastSdf) {
+            setLastSdf(data.viz_v5_lastSdf);
+            setTimeout(() => show3DMol(data.viz_v5_lastSdf), 500);
           }
         }
       } catch (err) {
@@ -134,7 +165,10 @@ const Visualizer = () => {
     
     // Очищаем канвас при каждом новом поиске
     if (viewerRef.current) {
-      viewerRef.current.innerHTML = '';
+      // Не очищаем innerHTML жестко, чтобы сохранить контекст, если это возможно
+      // Но если мы хотим полный сброс:
+      // viewerRef.current.innerHTML = ''; 
+      // Лучше использовать viewer.clear() в show3DMol
     }
 
     try {
@@ -168,6 +202,13 @@ const Visualizer = () => {
     }
   };
 
+  // Auto-search on first load if default and empty
+  useEffect(() => {
+    if (isLoaded && molecule === 'вода' && !lastSdf && !loading && !error) {
+       performSearch('вода');
+    }
+  }, [isLoaded]);
+
   const handleIsomerClick = async (cid) => {
     setLoading(true);
     setError(null);
@@ -192,59 +233,56 @@ const Visualizer = () => {
       return;
     }
     
-    // Очищаем контейнер
-    viewerRef.current.innerHTML = '';
-    
-    // Даем браузеру время на очистку и отрисовку перед созданием нового вьювера
-    setTimeout(() => {
-      try {
-        if (!viewerRef.current) return;
-        
-        // Определяем цвет фона в зависимости от темы
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const bgColor = isDark ? '#0f172a' : '#f8faff';
-        
-        // Создаём viewer классическим способом
-        let viewer;
+    try {
+      // Определяем цвет фона в зависимости от темы
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const bgColor = isDark ? '#0f172a' : '#f8faff';
+      
+      let viewer = v3dRef.current;
+
+      // Инициализируем viewer, если его нет или контейнер пуст
+      if (!viewer || viewerRef.current.innerHTML === '') {
+        viewerRef.current.innerHTML = ''; // Очистка для гарантии
         try {
           viewer = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: bgColor });
+          v3dRef.current = viewer;
         } catch (e) {
           console.error('Error creating viewer:', e);
           throw new Error('Ошибка инициализации 3D viewer');
         }
-        
-        // Добавляем модель из SDF
-        try {
-            if (typeof sdf !== 'string' || sdf.trim().length < 10) {
-                console.error('Invalid SDF data:', typeof sdf, sdf);
-                throw new Error('Получены некорректные данные молекулы');
-            }
-            
-            // Basic validation for SDF format (should contain "M  END" or atom block)
-            // But 3Dmol might be lenient, so we just try-catch.
-            
-            viewer.addModel(sdf, 'sdf');
-        } catch (e) {
-            console.error('Error adding model:', e);
-            // Если ошибка "The string did not match the expected pattern" (DOMException)
-            if (e.name === 'InvalidCharacterError' || e.message.includes('match the expected pattern')) {
-               throw new Error('Ошибка формата данных молекулы (недопустимые символы в ответе сервера).');
-            }
-            throw new Error(`Ошибка отображения молекулы: ${e.message}`);
-        }
-        
-        // Устанавливаем стиль отображения
-        viewer.setStyle({}, { stick: { radius: 0.3, color: isDark ? '#f8f9fa' : '#4f46e5' }, sphere: { scale: 0.38 } });
-        
-        // Центрируем и рендерим
-        viewer.zoomTo();
-        viewer.render();
-        viewer.resize();
-      } catch (err) {
-        console.error('3Dmol render error:', err);
-        setError(err.message);
+      } else {
+        viewer.setBackgroundColor(bgColor);
       }
-    }, 10);
+      
+      viewer.clear();
+      
+      // Добавляем модель из SDF
+      try {
+          if (typeof sdf !== 'string' || sdf.trim().length < 10) {
+              console.error('Invalid SDF data:', typeof sdf, sdf);
+              throw new Error('Получены некорректные данные молекулы');
+          }
+          
+          viewer.addModel(sdf, 'sdf');
+      } catch (e) {
+          console.error('Error adding model:', e);
+          if (e.name === 'InvalidCharacterError' || e.message.includes('match the expected pattern')) {
+             throw new Error('Ошибка формата данных молекулы (недопустимые символы в ответе сервера).');
+          }
+          throw new Error(`Ошибка отображения молекулы: ${e.message}`);
+      }
+      
+      // Устанавливаем стиль отображения
+      viewer.setStyle({}, { stick: { radius: 0.3, color: isDark ? '#f8f9fa' : '#4f46e5' }, sphere: { scale: 0.38 } });
+      
+      // Центрируем и рендерим
+      viewer.zoomTo();
+      viewer.render();
+      viewer.resize();
+    } catch (err) {
+      console.error('3Dmol render error:', err);
+      setError(err.message);
+    }
   };
 
   return (

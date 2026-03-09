@@ -39,7 +39,7 @@ async def visualize_compound(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
-    if current_user:
+    if current_user and compound and compound.strip():
         existing = db.query(SearchHistory).filter(
             SearchHistory.user_id == current_user.id,
             SearchHistory.query == compound,

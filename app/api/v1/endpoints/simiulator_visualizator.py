@@ -31,20 +31,19 @@ async def _get_sdf_any(compound: str) -> str | None:
     
     queries = []
     
-    # ПРИОРИТЕТ 1: Если формула - ищем название через API
+    # ПРИОРИТЕТ 1: Исходная строка (особенно если это формула)
+    queries.append(compound)
+    
+    # ПРИОРИТЕТ 2: Если формула - ищем название через API (как запасной вариант)
     if is_formula:
         api_name = await pubchem.fetch_name_by_formula(compound)
-        if api_name:
+        if api_name and api_name not in queries:
             queries.append(api_name)
     
-    # ПРИОРИТЕТ 2: Перевод
+    # ПРИОРИТЕТ 3: Перевод
     trans = await pubchem._maybe_translate_to_en(compound)
     if trans and trans not in queries:
         queries.append(trans)
-    
-    # ПРИОРИТЕТ 3: Исходная строка
-    if compound not in queries:
-        queries.append(compound)
         
     for q in queries:
         is_q_formula = bool(re.match(r'^([A-Z][a-z]?\d*)+$', q))
@@ -464,7 +463,7 @@ async def simulate_visualize(
     current_user: User = Depends(get_current_user_optional)
 ):
     """Поиск SDF для симулятора по названию или формуле и генерация кадров анимации"""
-    if current_user:
+    if current_user and reactants and reactants.strip():
         existing = db.query(SearchHistory).filter(
             SearchHistory.user_id == current_user.id,
             SearchHistory.query == reactants,
@@ -513,7 +512,7 @@ async def simulate_visualize(
     if not raw_equation:
         raise HTTPException(
             status_code=500,
-            detail="Не удалось получить уравнение реакции. Проверьте, что Ollama запущена.",
+            detail="Не удалось получить уравнение реакции. Проверьте подключение к GigaChat API.",
         )
 
     # Применяем защитные фильтры для исправления ошибок модели
@@ -576,7 +575,7 @@ async def simulate_visualize(
     product_static = None
     
     if reactant_models and product_models:
-        frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=30)
+        frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=60)
     else:
         model_error = "Не удалось получить 3D данные из PubChem ни для продуктов, ни для реагентов."
 
@@ -606,7 +605,9 @@ async def get_simulator_history(
         return []
     history = db.query(SearchHistory).filter(
         SearchHistory.user_id == current_user.id,
-        SearchHistory.history_type == "simulator"
+        SearchHistory.history_type == "simulator",
+        SearchHistory.query != "",
+        SearchHistory.query != None
     ).order_by(desc(SearchHistory.timestamp)).limit(20).all()
     
     return [{"query": h.query, "timestamp": h.timestamp.isoformat()} for h in history]
@@ -621,7 +622,9 @@ async def get_visualizer_history(
         return []
     history = db.query(SearchHistory).filter(
         SearchHistory.user_id == current_user.id,
-        SearchHistory.history_type == "visualizer"
+        SearchHistory.history_type == "visualizer",
+        SearchHistory.query != "",
+        SearchHistory.query != None
     ).order_by(desc(SearchHistory.timestamp)).limit(20).all()
     
     return [{"query": h.query, "timestamp": h.timestamp.isoformat()} for h in history]

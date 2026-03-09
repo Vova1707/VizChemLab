@@ -7,6 +7,8 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.seeds import seed_db
+from app.db.base import Base
+from app.db.session import engine
 
 def run_migrations():
     print("Запуск миграций базы данных...")
@@ -19,6 +21,8 @@ def run_migrations():
         print("Ошибка: Команда 'alembic' не найдена. Убедитесь, что alembic установлен.")
 
 def seed():
+    print("Создание таблиц...")
+    Base.metadata.create_all(bind=engine)
     print("Заполнение базы данных начальными данными...")
     seed_db()
     print("Данные успешно добавлены.")

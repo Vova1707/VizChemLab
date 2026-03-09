@@ -45,6 +45,7 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
+    logging.info(f"New user registered: {user.email}, is_verified={user.is_verified}")
 
     token = generate_verification_token(email)
     background_tasks.add_task(send_verification_email, email, token)
@@ -170,6 +171,7 @@ async def api_register(
     username: str = Body(...),
     email: str = Body(...),
     password: str = Body(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
     if db.query(User).filter(User.email == email).first():
@@ -179,12 +181,17 @@ async def api_register(
         )
     
     hashed_pw = get_password_hash(password)
-    new_user = User(username=username, email=email, hashed_password=hashed_pw, is_verified=True)
+    new_user = User(username=username, email=email, hashed_password=hashed_pw, is_verified=False)
     
     db.add(new_user)
     db.commit()
+    db.refresh(new_user)
     
-    return JSONResponse(content={"success": True, "message": "Вы успешно зарегистрировались!"})
+    token = generate_verification_token(email)
+    if background_tasks:
+        background_tasks.add_task(send_verification_email, email, token)
+    
+    return JSONResponse(content={"success": True, "message": "Вы успешно зарегистрировались! Проверьте почту для подтверждения."})
 
 @router.post("/api/login")
 async def api_login(
@@ -199,6 +206,12 @@ async def api_login(
         return JSONResponse(
             status_code=401, 
             content={"success": False, "message": "Неправильная почта или пароль!"}
+        )
+
+    if not user.is_verified:
+        return JSONResponse(
+            status_code=403,
+            content={"success": False, "message": "Почта не подтверждена! Проверьте входящие сообщения."}
         )
 
     # Запоминаем пользователя через куки

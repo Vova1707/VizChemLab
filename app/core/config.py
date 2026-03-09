@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # Google Gemini API
     GEMINI_API_KEY: Optional[str] = None
 
+    # GigaChat API
+    GIGACHAT_CLIENT_ID: Optional[str] = "019cd259-c72e-75cb-84b9-b0588a762d74"
+    GIGACHAT_AUTH_KEY: Optional[str] = "MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjE3NDlkZDg5LTI1MGMtNDFhNy05ZDYzLWE1MzIyMzUyMGIxZg=="
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

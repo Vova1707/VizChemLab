@@ -1,16 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Navigate } from 'react-router-dom';
 import { getSessionData, setSessionData } from '../services/api';
 import SimulationCharts from '../components/SimulationCharts';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 const toPretty = (eq = '') => {
   const map = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
-  // Коэффициенты (цифры в начале строки или после пробела/плюса) оставляем обычными.
-  // Индексы (цифры после букв или закрывающей скобки) делаем подстрочными.
   return eq.replace(/([A-Za-z\)])(\d+)/g, (match, p1, p2) => {
     return p1 + p2.split('').map(d => map[d] || d).join('');
   });
@@ -60,12 +55,9 @@ const ATOMIC_RADII = {
   Rg: 1.21, Cn: 1.22, Nh: 1.36, Fl: 1.43, Mc: 1.62, Lv: 1.75, Ts: 1.65, Og: 1.57
 };
 
-const getColorByElement = (el) => CPK_COLORS[el] || '#cccccc';
-
-const getRadiusByElement = (el) => (ATOMIC_RADII[el] || 0.8) * 0.8;
-
 const Simulator = () => {
   const { user } = useAuth();
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const [periodicTable, setPeriodicTable] = useState([]);
   const [isLoadingConstants, setIsLoadingConstants] = useState(true);
 
@@ -99,46 +91,46 @@ const Simulator = () => {
   };
 
   const [reactants, setReactants] = useState(() => {
-    return localStorage.getItem('simulator_reactants') || '';
+    return localStorage.getItem('sim_v5_reactants') || 'H2 + O2';
   });
   const [equation, setEquation] = useState(() => {
-    return localStorage.getItem('simulator_equation') || '';
+    return localStorage.getItem('sim_v5_equation') || '';
   });
   const [info, setInfo] = useState(() => {
-    const saved = localStorage.getItem('simulator_info');
+    const saved = localStorage.getItem('sim_v5_info');
     return saved ? JSON.parse(saved) : null;
   });
   const [model, setModel] = useState(() => {
-    const saved = localStorage.getItem('simulator_model');
+    const saved = localStorage.getItem('sim_v5_model');
     return saved ? JSON.parse(saved) : null;
   });
   const [models, setModels] = useState(() => {
-    const saved = localStorage.getItem('simulator_models');
+    const saved = localStorage.getItem('sim_v5_models');
     return saved ? JSON.parse(saved) : [];
   });
   const [frames, setFrames] = useState(() => {
-    const saved = localStorage.getItem('simulator_frames');
+    const saved = localStorage.getItem('sim_v5_frames');
     return saved ? JSON.parse(saved) : [];
   });
   const [reactantStatic, setReactantStatic] = useState(() => {
-    const saved = localStorage.getItem('simulator_reactantStatic');
+    const saved = localStorage.getItem('sim_v5_reactantStatic');
     return saved ? JSON.parse(saved) : null;
   });
   const [productStatic, setProductStatic] = useState(() => {
-    const saved = localStorage.getItem('simulator_productStatic');
+    const saved = localStorage.getItem('sim_v5_productStatic');
     return saved ? JSON.parse(saved) : null;
   });
   const [frameIndex, setFrameIndex] = useState(() => {
-    const saved = localStorage.getItem('simulator_frameIndex');
+    const saved = localStorage.getItem('sim_v5_frameIndex');
     return saved ? parseInt(saved, 10) : 0;
   });
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(() => {
-    const saved = localStorage.getItem('simulator_fps');
+    const saved = localStorage.getItem('sim_v5_fps');
     return saved ? parseFloat(saved) : 1.2;
   });
   const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('simulator_viewMode') || 'morph';
+    return localStorage.getItem('sim_v5_viewMode') || 'morph';
   });
   const [modelError, setModelError] = useState('');
   const [error, setError] = useState('');
@@ -156,76 +148,111 @@ const Simulator = () => {
   const [activeTab, setActiveTab] = useState('3d');
   const [libError, setLibError] = useState('');
 
+  // Version control for localStorage to ensure defaults are applied
+  useEffect(() => {
+    const STORAGE_VERSION = 'v5';
+    const currentVersion = localStorage.getItem('sim_storage_version');
+    
+    if (currentVersion !== STORAGE_VERSION) {
+      // Clear all simulator related keys
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sim_v5_') || key.startsWith('sim_v4_') || key.startsWith('sim_v3_') || key.startsWith('sim_v2_') || key.startsWith('simulator_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      
+      localStorage.setItem('sim_storage_version', STORAGE_VERSION);
+      
+      // Force update state to defaults
+      setReactants('H2 + O2');
+      setEquation('');
+      setInfo(null);
+      setModel(null);
+      setModels([]);
+      setFrames([]);
+      setReactantStatic(null);
+      setProductStatic(null);
+      setFrameIndex(0);
+      setPlaying(false);
+      setFps(1.2);
+      setViewMode('morph');
+    }
+  }, []);
+
   // Сохранение в localStorage и сессию
   useEffect(() => {
-    localStorage.setItem('simulator_reactants', reactants);
-    if (user) setSessionData({ simulator_reactants: reactants });
+    localStorage.setItem('sim_v5_reactants', reactants);
+    if (user) setSessionData({ sim_v5_reactants: reactants });
   }, [reactants, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_equation', equation);
-    if (user) setSessionData({ simulator_equation: equation });
+    localStorage.setItem('sim_v5_equation', equation);
+    if (user) setSessionData({ sim_v5_equation: equation });
   }, [equation, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_info', JSON.stringify(info));
-    if (user) setSessionData({ simulator_info: info });
+    localStorage.setItem('sim_v5_info', JSON.stringify(info));
+    if (user) setSessionData({ sim_v5_info: info });
   }, [info, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_model', JSON.stringify(model));
-    if (user) setSessionData({ simulator_model: model });
+    localStorage.setItem('sim_v5_model', JSON.stringify(model));
+    if (user) setSessionData({ sim_v5_model: model });
   }, [model, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_models', JSON.stringify(models));
-    if (user) setSessionData({ simulator_models: models });
+    localStorage.setItem('sim_v5_models', JSON.stringify(models));
+    if (user) setSessionData({ sim_v5_models: models });
   }, [models, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_frames', JSON.stringify(frames));
-    if (user) setSessionData({ simulator_frames: frames });
+    localStorage.setItem('sim_v5_frames', JSON.stringify(frames));
+    if (user) setSessionData({ sim_v5_frames: frames });
   }, [frames, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_reactantStatic', JSON.stringify(reactantStatic));
-    if (user) setSessionData({ simulator_reactantStatic: reactantStatic });
+    localStorage.setItem('sim_v5_reactantStatic', JSON.stringify(reactantStatic));
+    if (user) setSessionData({ sim_v5_reactantStatic: reactantStatic });
   }, [reactantStatic, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_productStatic', JSON.stringify(productStatic));
-    if (user) setSessionData({ simulator_productStatic: productStatic });
+    localStorage.setItem('sim_v5_productStatic', JSON.stringify(productStatic));
+    if (user) setSessionData({ sim_v5_productStatic: productStatic });
   }, [productStatic, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_frameIndex', frameIndex.toString());
-    if (user) setSessionData({ simulator_frameIndex: frameIndex });
+    localStorage.setItem('sim_v5_frameIndex', frameIndex.toString());
+    if (user) setSessionData({ sim_v5_frameIndex: frameIndex });
   }, [frameIndex, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_fps', fps.toString());
-    if (user) setSessionData({ simulator_fps: fps });
+    localStorage.setItem('sim_v5_fps', fps.toString());
+    if (user) setSessionData({ sim_v5_fps: fps });
   }, [fps, user]);
 
   useEffect(() => {
-    localStorage.setItem('simulator_viewMode', viewMode);
-    if (user) setSessionData({ simulator_viewMode: viewMode });
+    localStorage.setItem('sim_v5_viewMode', viewMode);
+    if (user) setSessionData({ sim_v5_viewMode: viewMode });
   }, [viewMode, user]);
 
   // Восстановление из сессии при монтировании
   useEffect(() => {
     const loadSession = async () => {
       const data = await getSessionData();
-      if (data.simulator_reactants) setReactants(data.simulator_reactants);
-      if (data.simulator_equation) setEquation(data.simulator_equation);
-      if (data.simulator_info) setInfo(data.simulator_info);
-      if (data.simulator_model) setModel(data.simulator_model);
-      if (data.simulator_frames) setFrames(data.simulator_frames);
-      if (data.simulator_reactantStatic) setReactantStatic(data.simulator_reactantStatic);
-      if (data.simulator_productStatic) setProductStatic(data.simulator_productStatic);
-      if (data.simulator_frameIndex !== undefined) setFrameIndex(data.simulator_frameIndex);
-      if (data.simulator_fps !== undefined) setFps(data.simulator_fps);
-      if (data.simulator_viewMode) setViewMode(data.simulator_viewMode);
+      if (data.sim_v5_reactants) setReactants(data.sim_v5_reactants);
+      if (data.sim_v5_equation) setEquation(data.sim_v5_equation);
+      if (data.sim_v5_info) setInfo(data.sim_v5_info);
+      if (data.sim_v5_model) setModel(data.sim_v5_model);
+      if (data.sim_v5_models) setModels(data.sim_v5_models);
+      if (data.sim_v5_frames) setFrames(data.sim_v5_frames);
+      if (data.sim_v5_reactantStatic) setReactantStatic(data.sim_v5_reactantStatic);
+      if (data.sim_v5_productStatic) setProductStatic(data.sim_v5_productStatic);
+      if (data.sim_v5_frameIndex !== undefined) setFrameIndex(data.sim_v5_frameIndex);
+      if (data.sim_v5_fps !== undefined) setFps(data.sim_v5_fps);
+      if (data.sim_v5_viewMode) setViewMode(data.sim_v5_viewMode);
     };
     loadSession();
     fetchHistory();
@@ -257,8 +284,8 @@ const Simulator = () => {
     }
   };
 
-  const handleSimulate = async (e) => {
-    e.preventDefault();
+  const handleSimulate = async (e, queryOverride = null) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setEquation('');
     setInfo(null);
@@ -283,11 +310,13 @@ const Simulator = () => {
     viewStatesRef.current = { reactants: null, products: null, morph: null };
     isNewSimRef.current = true;
 
+    const queryToUse = queryOverride || reactants;
+
     try {
       const res = await fetch('/api/simulate-visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reactants: reactants.trim() })
+        body: JSON.stringify({ reactants: queryToUse.trim() })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -330,7 +359,17 @@ const Simulator = () => {
   };
 
   useEffect(() => {
+    // Force viewer cleanup when leaving 3d tab to ensure proper re-initialization
+    if (activeTab !== '3d') {
+      v3dRef.current = null;
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     const renderFrame = async () => {
+      // Don't render if not in 3d mode
+      if (activeTab !== '3d') return;
+
       const list = frames.length ? frames : lastFramesRef.current;
       if (!list.length || !viewerRef.current) return;
 
@@ -368,7 +407,7 @@ const Simulator = () => {
       
       // Определяем цвет фона и связей в зависимости от темы
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const bgColor = isDark ? '#0f172a' : '#000000'; // Для симулятора оставим черный или очень темный по умолчанию, но адаптируем
+      const bgColor = isDark ? '#0f172a' : '#f8faff'; // Адаптивный фон: темный для темной темы, светлый для светлой
 
       // Инициализируем viewer только если его еще нет
       if (!v3dRef.current) {
@@ -401,82 +440,90 @@ const Simulator = () => {
       // Очищаем только объекты, не трогая сам контейнер и камеру
       viewer.clear();
 
+      // Calculate bounds for manual centering
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
       if (currentFrame.atoms) {
         const molCenters = {};
         
-        // Создаем невидимую модель для корректной работы zoomTo()
-        // Важно: добавляем атомы с реальными радиусами, чтобы bounding box был правильным!
-        const dummyModel = viewer.addModel();
-
-        // Рендерим атомы напрямую
-        let dummyAtomCount = 0;
-        currentFrame.atoms.forEach(a => {
+        // Render atoms using addSphere
+        currentFrame.atoms.forEach((a) => {
           if (a.opacity <= 0.05) return;
           
-          const radius = getRadiusByElement(a.element) || 0.8;
-          const color = getColorByElement(a.element) || '#cccccc';
+          // Force fallback values if calculation fails
+          let radius = getRadiusByElement(a.element);
+          if (!radius || isNaN(radius) || radius < 0.1) radius = 0.8; // Default large enough radius
+          
+          let color = getColorByElement(a.element);
+          if (!color) color = '#cccccc';
 
-          // Основной визуальный объект (сфера)
+          const alpha = a.opacity !== undefined ? a.opacity : 1.0;
+
+          // Debug: log atom props
+          // console.log('Atom:', a.element, radius, color, alpha);
+
           viewer.addSphere({
             center: { x: a.x, y: a.y, z: a.z },
-            radius: radius,
+            radius: radius, // Ensure this is a number
             color: color,
-            alpha: a.opacity
-          });
-
-          // Атом для dummyModel (для zoomTo)
-          // Используем реальный радиус, но делаем полностью прозрачным
-          dummyModel.addAtom({
-            elem: a.element || 'C',
-            x: a.x, y: a.y, z: a.z
+            alpha: alpha
           });
           
-          // Устанавливаем стиль для конкретного атома
-          // opacity: 0.01 делает его практически невидимым, но он точно учитывается в zoomTo
-          dummyModel.setStyle({index: dummyAtomCount}, { sphere: { radius: radius, opacity: 0.01 } });
-          dummyAtomCount++;
+          // Update bounds
+          minX = Math.min(minX, a.x);
+          minY = Math.min(minY, a.y);
+          minZ = Math.min(minZ, a.z);
+          maxX = Math.max(maxX, a.x);
+          maxY = Math.max(maxY, a.y);
+          maxZ = Math.max(maxZ, a.z);
 
-          // Собираем координаты для расчета центра молекулы (восстановлено)
+          // Collect coordinates for molecule centers (labels)
           if (a.mol_idx !== undefined) {
-            if (!molCenters[a.mol_idx]) {
-              molCenters[a.mol_idx] = { x: 0, y: 0, z: 0, count: 0, minY: Infinity };
-            }
-            molCenters[a.mol_idx].x += a.x;
-            molCenters[a.mol_idx].y += a.y;
-            molCenters[a.mol_idx].z += a.z;
-            molCenters[a.mol_idx].count += 1;
-            molCenters[a.mol_idx].minY = Math.min(molCenters[a.mol_idx].minY, a.y);
+             if (!molCenters[a.mol_idx]) {
+               molCenters[a.mol_idx] = { x: 0, y: 0, z: 0, count: 0, minY: Infinity };
+             }
+             molCenters[a.mol_idx].x += a.x;
+             molCenters[a.mol_idx].y += a.y;
+             molCenters[a.mol_idx].z += a.z;
+             molCenters[a.mol_idx].count += 1;
+             molCenters[a.mol_idx].minY = Math.min(molCenters[a.mol_idx].minY, a.y);
           }
         });
 
-        // Скрываем dummyModel глобально (на всякий случай, хотя мы задали стиль каждому атому)
-        // dummyModel.setStyle({}, { sphere: { radius: 1.0, opacity: 0.0, color: 'black' } }); 
+        // Render bonds using addCylinder
+        if (currentFrame.bonds) {
+          currentFrame.bonds.forEach(b => {
+             const startAtom = currentFrame.atoms[b.start];
+             const endAtom = currentFrame.atoms[b.end];
+             
+             if (startAtom && endAtom) {
+                 // Check if both atoms are visible enough
+                 if (startAtom.opacity > 0.05 && endAtom.opacity > 0.05) {
+                     // Only draw bond if atoms belong to the same molecule
+                     if (startAtom.mol_idx === endAtom.mol_idx) {
+                         const bondOpacity = b.opacity !== undefined ? b.opacity : 1.0;
+                         const atomOpacity = Math.min(
+                             startAtom.opacity !== undefined ? startAtom.opacity : 1.0, 
+                             endAtom.opacity !== undefined ? endAtom.opacity : 1.0
+                         );
 
-
-        // Calculate bounds for manual centering and debug
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-        let atomCount = 0;
-
-        currentFrame.atoms.forEach(a => {
-            if (a.opacity > 0.05) {
-                atomCount++;
-                minX = Math.min(minX, a.x);
-                minY = Math.min(minY, a.y);
-                minZ = Math.min(minZ, a.z);
-                maxX = Math.max(maxX, a.x);
-                maxY = Math.max(maxY, a.y);
-                maxZ = Math.max(maxZ, a.z);
-            }
-        });
-
-        // Debug info
-        if (debugRef.current) {
-            debugRef.current.style.display = 'block'; // Show for debugging
-            debugRef.current.innerText = `Atoms: ${atomCount}\nBounds: X[${minX.toFixed(1)}, ${maxX.toFixed(1)}]\nCenter: [${((minX+maxX)/2).toFixed(1)}, ${((minY+maxY)/2).toFixed(1)}, ${((minZ+maxZ)/2).toFixed(1)}]`;
+                         viewer.addCylinder({
+                             start: {x: startAtom.x, y: startAtom.y, z: startAtom.z},
+                             end: {x: endAtom.x, y: endAtom.y, z: endAtom.z},
+                             radius: 0.15, // Make bonds slightly thinner than atoms
+                             fromCap: 1,
+                             toCap: 1,
+                             color: isDark ? '#f8f9fa' : '#64748b',
+                             alpha: bondOpacity * atomOpacity
+                         });
+                     }
+                 }
+             }
+          });
         }
 
-        // Добавляем подписи под молекулами в 3D пространстве
+        // Add labels under molecules
         if (info && (viewMode === 'reactants' || viewMode === 'products')) {
           const labelsList = viewMode === 'reactants' ? info["реагенты"] : info["продукты"];
           Object.keys(molCenters).forEach(idx => {
@@ -504,30 +551,6 @@ const Simulator = () => {
             }
           });
         }
-
-        // Рендерим связи
-        if (currentFrame.bonds) {
-          currentFrame.bonds.forEach(b => {
-            const startAtom = currentFrame.atoms[b.start];
-            const endAtom = currentFrame.atoms[b.end];
-            if (startAtom && endAtom) {
-              const opacity = b.opacity ?? 1.0;
-              // Отрисовываем связи только если оба атома принадлежат ОДНОЙ молекуле (mol_idx)
-              // и только если оба атома сейчас видимы (opacity > 0.1)
-              if (opacity > 0.1 && startAtom.mol_idx === endAtom.mol_idx) {
-                viewer.addCylinder({
-                  start: { x: startAtom.x, y: startAtom.y, z: startAtom.z },
-                  end: { x: endAtom.x, y: endAtom.y, z: endAtom.z },
-                  radius: 0.22, // Более заметные связи
-                  fromCap: 1,
-                  toCap: 1,
-                  color: isDark ? '#f8f9fa' : '#64748b', // Адаптируем цвет связей под тему
-                  alpha: opacity * 0.8
-                });
-              }
-            }
-          });
-        }
       }
 
       // Восстанавливаем камеру
@@ -542,16 +565,13 @@ const Simulator = () => {
             viewer.center({x: cx, y: cy, z: cz});
         }
         
-        // Zoom to fit all atoms (including dummy model)
         viewer.zoomTo();
-        
         isNewSimRef.current = false;
       } else {
         const savedView = viewStatesRef.current[viewMode];
         if (savedView) {
           viewer.setView(savedView);
         } else {
-          // Если для этого режима еще нет сохраненного вида, делаем zoomTo
           viewer.zoomTo();
         }
       }
@@ -564,7 +584,7 @@ const Simulator = () => {
     };
 
     renderFrame();
-  }, [frames, frameIndex, viewMode, info, reactantStatic, productStatic]);
+  }, [frames, frameIndex, viewMode, info, reactantStatic, productStatic, periodicTable, activeTab]);
 
   useEffect(() => {
     const list = frames && frames.length ? frames : lastFramesRef.current;
@@ -584,415 +604,421 @@ const Simulator = () => {
     }
   };
 
-  return React.createElement('div', { 
-    className: 'page-layout'
-  },
-    // Модальное окно подтверждения удаления
-    deleteConfirm && React.createElement('div', {
-      style: {
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        backdropFilter: 'blur(4px)'
-      }
-    },
-      React.createElement('div', { 
-        className: 'glass-card', 
-        style: {
-          width: 400,
-          padding: '30px',
-          textAlign: 'center',
+  // Auto-simulate on first load if default and empty
+  useEffect(() => {
+    if (reactants === 'H2 + O2' && frames.length === 0 && !loading && !error && !equation) {
+       handleSimulate({ preventDefault: () => {} });
+    }
+  }, []);
+
+  return (
+    <div className="page-layout">
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '20px'
-        }
-      },
-        React.createElement('h3', { style: { margin: 0, color: 'var(--text-main)' } }, 'Удаление из истории'),
-        React.createElement('p', { style: { margin: 0, color: 'var(--text-secondary)' } }, 
-          'Вы точно хотите удалить этот запрос: ', 
-          React.createElement('strong', null, deleteConfirm), 
-          '?'
-        ),
-        React.createElement('div', { style: { display: 'flex', gap: '12px', justifyContent: 'center' } },
-          React.createElement('button', { 
-            onClick: () => setDeleteConfirm(null),
-            className: 'btn btn-sm btn-white',
-          }, 'Отмена'),
-          React.createElement('button', { 
-            onClick: () => handleDeleteHistory(deleteConfirm),
-            className: 'btn btn-sm',
-            style: { background: 'var(--error)', border: 'none', color: 'white' }
-          }, 'Удалить')
-        )
-      )
-    ),
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div className="glass-card" style={{
+            width: 400,
+            padding: '30px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <h3 style={{ margin: 0, color: 'var(--text-main)' }}>Удаление из истории</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+              Вы точно хотите удалить этот запрос: <strong>{deleteConfirm}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button 
+                onClick={() => setDeleteConfirm(null)}
+                className="btn btn-sm btn-white"
+              >
+                Отмена
+              </button>
+              <button 
+                onClick={() => handleDeleteHistory(deleteConfirm)}
+                className="btn btn-sm"
+                style={{ background: 'var(--error)', border: 'none', color: 'white' }}
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-    // Левая панель истории
-    user && React.createElement('div', {
-      className: 'glass-card sidebar',
-      style: { height: 'calc(100vh - 80px)' } // Override fixed height to fit screen
-    },
-      React.createElement('h2', { 
-        className: 'section-header'
-      },
-        React.createElement('span', { className: 'status-dot', style: { background: 'var(--primary)' } }),
-        'История'
-      ),
-      React.createElement('div', { 
-        className: 'scrollable-content custom-scrollbar'
-      },
-        history.length === 0 ? (
-          React.createElement('div', { 
-            style: { 
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)', 
-              fontSize: 14,
-              fontStyle: 'italic',
-              opacity: 0.6
-            }
-          }, 'История пуста')
-        ) : (
-          history.map((item, idx) => (
-            React.createElement('div', { key: idx, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' } },
-              React.createElement('button', {
-                onClick: (e) => {
-                  e.stopPropagation();
-                  setDeleteConfirm(item.query);
-                },
-                style: {
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--error)',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  padding: '0 4px',
-                  opacity: 0.6,
-                  transition: 'opacity 0.2s'
-                },
-                onMouseOver: (e) => e.target.style.opacity = 1,
-                onMouseOut: (e) => e.target.style.opacity = 0.6
-              }, '×'),
-              React.createElement('button', {
-                onClick: () => {
-                  setReactants(item.query);
-                  // Мы не вызываем handleSimulate напрямую, так как он ожидает Event
-                  // Вместо этого мы создаем искусственный объект события или рефакторим
-                  const fakeEvent = { preventDefault: () => {} };
-                  // Но лучше просто вызвать логику поиска. Для простоты здесь:
-                  document.getElementById('simulate-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                },
-                className: 'btn-isomer',
-                style: {
-                  flex: 1,
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  color: 'var(--text-main)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  transition: 'all 0.2s',
-                  fontWeight: '600'
-                }
-              }, item.query)
-            )
-          ))
-        )
-      )
-    ),
-
-    React.createElement('div', { 
-      className: 'glass-card main-content',
-      style: { height: 'calc(100vh - 80px)', width: '100%', maxWidth: '100%', flex: 1 } // Full width for better visibility
-    },
-      React.createElement('div', { 
-        className: 'scrollable-content custom-scrollbar'
-      },
-        React.createElement('div', { style: { marginBottom: '24px', textAlign: 'center' } },
-          React.createElement('h1', { style: { fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } }, 'Симулятор реакций'),
-          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '1.1rem' } }, 'Введите реагенты, чтобы получить уравнение реакции')
-        ),
-        React.createElement('form', { id: 'simulate-form', onSubmit: handleSimulate },
-        React.createElement('div', { className: 'form-group' },
-          React.createElement('label', { htmlFor: 'reactants' }, 'Реагенты'),
-          React.createElement('input', {
-            id: 'reactants',
-            className: 'form-input',
-            style: { backgroundColor: 'var(--bg-body)', color: 'var(--text-main)', fontSize: '1.2rem', padding: '16px 20px' },
-            type: 'text',
-            value: reactants,
-            onChange: e => setReactants(e.target.value),
-            placeholder: 'Например: H2 + O2',
-            required: true
-          })
-        ),
-        React.createElement('button', { className: 'btn', type: 'submit', disabled: loading, style: { height: '56px', fontSize: '1.1rem', fontWeight: '600' } }, loading ? 'Считаем...' : 'Симулировать')
-      ),
-      equation && React.createElement('div', {
-        style: { marginTop: 24, fontSize: 32, textAlign: 'center', fontWeight: 700, letterSpacing: 0.5, color: 'var(--text-main)' }
-      }, equation),
-      info && React.createElement('div', { className: 'info-message', style: { marginTop: 14, lineHeight: 1.8, textAlign: 'center' } },
-        React.createElement('div', null, `Реагенты: ${info["реагенты"]?.join(' + ') || '-'}`),
-        React.createElement('div', null, `Продукты: ${info["продукты"]?.join(' + ') || '-'}`),
-        React.createElement('div', null, `Число элементов: ${info["элементов"] ?? '-'}`)
-      ),
-      model && React.createElement('div', {
-        style: {
-          marginTop: 18,
-          padding: 16,
-          background: '#f7faff',
-          borderRadius: 12,
-          border: '1.5px solid #c8d8f0'
-        }
-      },
-        // Tabs
-        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 20, borderBottom: '1px solid #e0e7f5', paddingBottom: 10 } },
-           React.createElement('div', { style: { display: 'flex', gap: 10 } },
-               ['3d', 'charts'].map(tab => 
-                   React.createElement('button', {
-                       key: tab,
-                       onClick: () => setActiveTab(tab),
-                       style: {
-                           padding: '8px 16px',
-                           borderRadius: '8px',
-                           border: 'none',
-                           background: activeTab === tab ? 'var(--primary)' : 'transparent',
-                           color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
-                           cursor: 'pointer',
-                           fontWeight: 600
-                       }
-                   }, tab === '3d' ? 'Анимация' : 'Информация')
-               )
-           )
-        ),
-
-        // Charts & Information
-        activeTab === 'charts' && React.createElement('div', { className: 'simulation-info-tab' },
-          React.createElement(SimulationCharts, { equation, fps }),
-          
-          // Molecules Properties
-          models && models.length > 0 && React.createElement('div', { style: { marginTop: 30 } },
-            React.createElement('h3', { style: { textAlign: 'center', marginBottom: 20, color: 'var(--text-main)' } }, 'Свойства веществ'),
-            React.createElement('div', { 
-              style: { 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-                gap: 20 
-              } 
-            },
-              models.map((m, idx) => 
-                React.createElement('div', { 
-                  key: idx, 
-                  className: 'glass-card', 
-                  style: { 
-                    padding: 20, 
-                    borderRadius: 12,
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                  } 
-                },
-                  React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1.1rem', marginBottom: 10, color: 'var(--primary)', borderBottom: '1px solid var(--border)', paddingBottom: 5 } }, m.compound),
-                  m.properties ? React.createElement(React.Fragment, null,
-                    React.createElement('div', { style: { marginBottom: 6, fontSize: '0.95rem' } }, 
-                      React.createElement('span', { style: { color: 'var(--text-secondary)' } }, 'Название: '),
-                      m.properties.name || m.properties.name_en || '-'
-                    ),
-                    React.createElement('div', { style: { marginBottom: 6, fontSize: '0.95rem' } }, 
-                      React.createElement('span', { style: { color: 'var(--text-secondary)' } }, 'Формула: '),
-                      m.properties.formula || '-'
-                    ),
-                    React.createElement('div', { style: { marginBottom: 6, fontSize: '0.95rem' } }, 
-                      React.createElement('span', { style: { color: 'var(--text-secondary)' } }, 'Молярная масса: '),
-                      m.properties.weight ? `${m.properties.weight} г/моль` : '-'
-                    ),
-                    React.createElement('div', { style: { marginTop: 10, fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' } }, 
-                      'Источник: PubChem'
-                    )
-                  ) : React.createElement('div', { style: { color: 'var(--text-muted)', fontStyle: 'italic' } }, 'Свойства не найдены')
-                )
-              )
-            ),
-            React.createElement('div', { 
-              style: { 
-                marginTop: 25, 
-                padding: 15, 
-                borderRadius: 8, 
-                background: 'rgba(255, 193, 7, 0.1)', 
-                border: '1px solid rgba(255, 193, 7, 0.3)',
-                fontSize: '0.9rem', 
+      {/* Sidebar */}
+      {user && (
+        <div className="glass-card sidebar">
+          <h2 className="section-header">
+            <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
+            История
+          </h2>
+          <div className="scrollable-content custom-scrollbar">
+            {history.length === 0 ? (
+              <div style={{ 
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: 'var(--text-secondary)', 
-                textAlign: 'center' 
-              } 
-            }, 
-              'Примечание: Графики кинетики и энергии являются симуляцией на основе теоретических моделей. Физико-химические свойства веществ получены из открытых источников (PubChem).'
-            )
-          )
-        ),
-
-        // 3D Content (Conditional)
-        activeTab === '3d' && React.createElement(React.Fragment, null,
-          React.createElement('div', { style: { fontWeight: 600, marginBottom: 10, textAlign: 'center', color: '#1b257a' } },
-          viewMode === 'morph' && frames && frames.length > 1
-              ? `Этап реакции: ${frames[frameIndex % frames.length]?.title || ''} (${frameIndex + 1}/${frames.length})`
-              : (viewMode === 'reactants' ? 'Реагенты (Исходное состояние)' : 'Продукты (Результат реакции)')),
-          
-          React.createElement('div', { 
-            style: { 
-              display: 'flex', 
-              justifyContent: 'center', 
-              gap: 10, 
-              marginBottom: 12 
-            } 
-          },
-            ['reactants', 'morph', 'products'].map(mode => 
-              React.createElement('button', {
-                key: mode,
-                className: `btn ${viewMode === mode ? '' : 'btn-secondary'}`,
-                style: { 
-                  padding: '6px 12px', 
-                  fontSize: 14,
-                  backgroundColor: viewMode === mode ? 'var(--primary)' : 'var(--bg-card)',
-                  color: viewMode === mode ? '#fff' : 'var(--text-main)',
-                  border: viewMode === mode ? 'none' : '1px solid var(--border)',
-                  borderRadius: 6,
-                  cursor: 'pointer'
-                },
-                onClick: () => setViewMode(mode)
-              }, mode === 'reactants' ? 'Реагенты' : mode === 'products' ? 'Продукты' : 'Реакция')
-            ),
-            React.createElement('button', {
-              className: 'btn btn-secondary',
-              style: { 
-                padding: '6px 12px', 
                 fontSize: 14,
-                backgroundColor: '#343a40',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 6,
-                cursor: 'pointer',
-                marginLeft: '10px'
-              },
-              onClick: handleResetCamera
-            }, 'Сбросить камеру')
-          ),
-
-          React.createElement('div', {
-            style: {
-              width: '100%',
-              height: '60vh',
-              minHeight: '400px',
-              background: '#0f111a',
-              borderRadius: 10,
-              border: '1px solid #242b3a',
-              boxShadow: '0 2px 12px #0c0f1a',
-              overflow: 'hidden',
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }
-          },
-            (!frames || frames.length === 0) ? (
-              React.createElement('div', { style: { textAlign: 'center', padding: 20 } },
-                React.createElement('div', { style: { fontSize: 48, marginBottom: 16 } }, '⚛️'),
-                React.createElement('h3', { style: { color: '#e2e8f0', marginBottom: 8 } }, modelError || 'Нет данных для визуализации'),
-                React.createElement('p', { style: { color: '#94a3b8' } }, 'Попробуйте изменить реагенты')
-              )
+                fontStyle: 'italic',
+                opacity: 0.6
+              }}>
+                История пуста
+              </div>
             ) : (
-              React.createElement('div', { style: { position: 'relative', width: '100%', height: '100%' } },
-                React.createElement('div', {
-                  ref: viewerRef,
-                  style: { width: '100%', height: '100%' }
-                }),
-                React.createElement('div', {
-                  ref: debugRef,
-                  style: {
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    color: '#00ff00',
-                    padding: '4px 8px',
-                    borderRadius: 4,
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
-                    pointerEvents: 'none',
-                    zIndex: 10,
-                    display: 'none' // Скрыт по умолчанию, можно включить для отладки
-                  }
-                })
-              )
-            )
-          )
-        ),
-        activeTab === '3d' && viewMode === 'morph' && frames && frames.length > 1 && React.createElement('div', {
-          style: { marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }
-        },
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-            React.createElement('button', {
-              className: 'btn',
-              type: 'button',
-              style: { padding: '8px 14px' },
-              onClick: () => setPlaying((p) => !p)
-            }, playing ? 'Пауза' : 'Играть'),
-            React.createElement('input', {
-              type: 'range',
-              min: 0,
-              max: frames.length - 1,
-              value: frameIndex,
-              onChange: (e) => setFrameIndex(Number(e.target.value)),
-              style: { flex: 1 }
-            }),
-            React.createElement('div', null, `${frameIndex + 1}/${frames.length}`)
-          ),
-          React.createElement('div', {
-            style: {
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: 13,
-              color: '#6e7a9e'
-            }
-          },
-            React.createElement('span', null, frames[0]?.title || 'Реагенты'),
-            frames[1] ? React.createElement('span', null, frames[1].title) : null,
-            React.createElement('span', null, frames[frames.length - 1]?.title || 'Продукты')
-          ),
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6e7a9e' } },
-            'Скорость',
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-              React.createElement('input', {
-                type: 'range',
-                min: 0.2,
-                max: 10,
-                step: 0.2,
-                value: fps,
-                onChange: (e) => setFps(Number(e.target.value)),
-                style: { flex: 1, minWidth: '100px' }
-              }),
-              React.createElement('span', { style: { minWidth: '40px' } }, `${fps.toFixed(1)} FPS`)
-            )
-          )
-        )
-      ),
-      libError && React.createElement('div', { className: 'error-message', style: { marginTop: 12, textAlign: 'center', color: '#ff0000' } }, libError),
-      modelError && React.createElement('div', { className: 'warning-message', style: { marginTop: 12, textAlign: 'center', color: '#c47b2d' } }, modelError),
-      error && React.createElement('div', { className: 'error-message', style: { marginTop: 20 } }, error)
-    )
-  )
-);
+              history.map((item, idx) => (
+                <div key={idx} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(item.query);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--error)',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      padding: '0 4px',
+                      opacity: 0.6,
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.opacity = 1}
+                    onMouseOut={(e) => e.target.style.opacity = 0.6}
+                  >
+                    ×
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReactants(item.query);
+                      handleSimulate(null, item.query);
+                    }}
+                    className="btn-isomer"
+                    style={{
+                      flex: 1,
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      fontSize: '14px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--text-main)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      transition: 'all 0.2s',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {item.query}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="glass-card main-content" style={{ width: '100%', maxWidth: '100%' }}>
+        <div className="scrollable-content custom-scrollbar">
+          <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+            <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              Симулятор реакций
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+              Введите реагенты, чтобы получить уравнение реакции
+            </p>
+          </div>
+
+          <form id="simulate-form" onSubmit={handleSimulate}>
+            <div className="form-group">
+              <label htmlFor="reactants">Реагенты</label>
+              <input
+                id="reactants"
+                className="form-input"
+                style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-main)', fontSize: '1.2rem', padding: '16px 20px' }}
+                type="text"
+                value={reactants}
+                onChange={e => setReactants(e.target.value)}
+                placeholder="Например: H2 + O2"
+                required
+              />
+            </div>
+            <button className="btn" type="submit" disabled={loading} style={{ height: '56px', fontSize: '1.1rem', fontWeight: '600' }}>
+              {loading ? 'Считаем...' : 'Симулировать'}
+            </button>
+          </form>
+
+          {equation && (
+            <div style={{ marginTop: 24, fontSize: 32, textAlign: 'center', fontWeight: 700, letterSpacing: 0.5, color: 'var(--text-main)' }}>
+              {equation}
+            </div>
+          )}
+
+          {info && (
+            <div className="info-message" style={{ marginTop: 14, lineHeight: 1.8, textAlign: 'center' }}>
+              <div>Реагенты: {info["реагенты"]?.join(' + ') || '-'}</div>
+              <div>Продукты: {info["продукты"]?.join(' + ') || '-'}</div>
+              <div>Число элементов: {info["элементов"] ?? '-'}</div>
+            </div>
+          )}
+
+          {model && (
+            <div style={{
+              marginTop: 18,
+              padding: 16,
+              background: isDark ? 'var(--bg-card)' : '#f7faff',
+              borderRadius: 12,
+              border: isDark ? '1px solid var(--border)' : '1.5px solid #c8d8f0'
+            }}>
+              {/* Tabs */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {['3d', 'charts'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: activeTab === tab ? 'var(--primary)' : 'transparent',
+                        color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      {tab === '3d' ? 'Анимация' : 'Информация'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Charts & Information */}
+              {activeTab === 'charts' && (
+                <div className="simulation-info-tab">
+                  <SimulationCharts equation={equation} fps={fps} />
+                  
+                  {models && models.length > 0 && (
+                    <div style={{ marginTop: 30 }}>
+                      <h3 style={{ textAlign: 'center', marginBottom: 20, color: 'var(--text-main)' }}>Свойства веществ</h3>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                        gap: 20 
+                      }}>
+                        {models.map((m, idx) => (
+                          <div key={idx} className="glass-card" style={{ 
+                            padding: 20, 
+                            borderRadius: 12,
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border)',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                          }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: 10, color: 'var(--primary)', borderBottom: '1px solid var(--border)', paddingBottom: 5 }}>
+                              {m.compound}
+                            </div>
+                            {m.properties ? (
+                              <>
+                                <div style={{ marginBottom: 6, fontSize: '0.95rem' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Название: </span>
+                                  {m.properties.name || m.properties.name_en || '-'}
+                                </div>
+                                <div style={{ marginBottom: 6, fontSize: '0.95rem' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Формула: </span>
+                                  {m.properties.formula || '-'}
+                                </div>
+                                <div style={{ marginBottom: 6, fontSize: '0.95rem' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Молярная масса: </span>
+                                  {m.properties.weight ? `${m.properties.weight} г/моль` : '-'}
+                                </div>
+                                <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                  Источник: PubChem
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Свойства не найдены</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ 
+                        marginTop: 25, 
+                        padding: 15, 
+                        borderRadius: 8, 
+                        background: 'rgba(255, 193, 7, 0.1)', 
+                        border: '1px solid rgba(255, 193, 7, 0.3)',
+                        fontSize: '0.9rem', 
+                        color: 'var(--text-secondary)', 
+                        textAlign: 'center' 
+                      }}>
+                        Примечание: Графики кинетики и энергии являются симуляцией на основе теоретических моделей. Физико-химические свойства веществ получены из открытых источников (PubChem).
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3D Content */}
+              {activeTab === '3d' && (
+                <>
+                  <div style={{ fontWeight: 600, marginBottom: 10, textAlign: 'center', color: isDark ? 'var(--text-main)' : '#1b257a' }}>
+                    {viewMode === 'morph' && frames && frames.length > 1
+                      ? `Этап реакции: ${frames[frameIndex % frames.length]?.title || ''} (${frameIndex + 1}/${frames.length})`
+                      : (viewMode === 'reactants' ? 'Реагенты (Исходное состояние)' : 'Продукты (Результат реакции)')}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 12 }}>
+                    {['reactants', 'morph', 'products'].map(mode => (
+                      <button
+                        key={mode}
+                        className="btn"
+                        style={{ 
+                          padding: '6px 12px', 
+                          fontSize: 14,
+                          backgroundColor: viewMode === mode ? 'var(--primary)' : 'transparent',
+                          color: viewMode === mode ? '#fff' : 'var(--text-main)',
+                          border: viewMode === mode ? 'none' : '1px solid var(--border)',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onClick={() => setViewMode(mode)}
+                      >
+                        {mode === 'reactants' ? 'Реагенты' : mode === 'products' ? 'Продукты' : 'Реакция'}
+                      </button>
+                    ))}
+                    <button
+                      className="btn btn-secondary"
+                      style={{ 
+                        padding: '6px 12px', 
+                        fontSize: 14,
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        marginLeft: '10px',
+                        fontWeight: 500
+                      }}
+                      onClick={handleResetCamera}
+                    >
+                      Сбросить камеру
+                    </button>
+                  </div>
+
+                  <div style={{
+                    width: '100%',
+                    height: '60vh',
+                    minHeight: '400px',
+                    background: isDark ? '#0f172a' : '#f8faff',
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {(!frames || frames.length === 0) ? (
+                      <div style={{ textAlign: 'center', padding: 20 }}>
+                        <div style={{ fontSize: 48, marginBottom: 16 }}>⚛️</div>
+                        <h3 style={{ color: '#e2e8f0', marginBottom: 8 }}>{modelError || 'Нет данных для визуализации'}</h3>
+                        <p style={{ color: '#94a3b8' }}>Попробуйте изменить реагенты</p>
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                        <div ref={viewerRef} style={{ width: '100%', height: '100%' }} />
+                        <div ref={debugRef} style={{
+                          position: 'absolute',
+                          top: 10,
+                          right: 10,
+                          background: 'rgba(0, 0, 0, 0.7)',
+                          color: '#00ff00',
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                          fontSize: '11px',
+                          fontFamily: 'monospace',
+                          pointerEvents: 'none',
+                          zIndex: 10,
+                          display: 'none'
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              
+              {activeTab === '3d' && viewMode === 'morph' && frames && frames.length > 1 && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                      className="btn"
+                      type="button"
+                      style={{ padding: '8px 14px' }}
+                      onClick={() => setPlaying((p) => !p)}
+                    >
+                      {playing ? 'Пауза' : 'Играть'}
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={frames.length - 1}
+                      value={frameIndex}
+                      onChange={(e) => setFrameIndex(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <div>{frameIndex + 1}/{frames.length}</div>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 13,
+                    color: '#6e7a9e'
+                  }}>
+                    <span>{frames[0]?.title || 'Реагенты'}</span>
+                    {frames[1] ? <span>{frames[1].title}</span> : null}
+                    <span>{frames[frames.length - 1]?.title || 'Продукты'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6e7a9e' }}>
+                    Скорость
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={10}
+                        step={0.2}
+                        value={fps}
+                        onChange={(e) => setFps(Number(e.target.value))}
+                        style={{ flex: 1, minWidth: '100px' }}
+                      />
+                      <span style={{ minWidth: '40px' }}>{fps.toFixed(1)} FPS</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {libError && <div className="error-message" style={{ marginTop: 12, textAlign: 'center', color: '#ff0000' }}>{libError}</div>}
+          {modelError && <div className="warning-message" style={{ marginTop: 12, textAlign: 'center', color: '#c47b2d' }}>{modelError}</div>}
+          {error && <div className="error-message" style={{ marginTop: 20 }}>{error}</div>}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Simulator;

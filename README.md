@@ -1,10 +1,10 @@
 # Веб-платформа, 3D визуализатор VizChemLab
 
-**VizChemLab** — это современная веб-платформа для моделирования и визуализации химических реакций и молекул. Проект объединяет мощный бэкенд на FastAPI, интерактивный фронтенд на React и возможности искусственного интеллекта для помощи в изучении химии.
+**VizChemLab** — это современная веб-платформа для моделирования и визуализации химических реакций и молекул. Проект объединяет мощный бэкенд на FastAPI, интерактивный фронтенд на React и возможности искусственного интеллекта (GigaChat API) для помощи в изучении химии.
 
 ## 🚀 Основные возможности
 
-- **Симулятор химических реакций**: Генерация и уравнивание химических уравнений с использованием языковой модели.
+- **Симулятор химических реакций**: Генерация и уравнивание химических уравнений с использованием языковой модели GigaChat.
 - **3D Визуализация молекул**: Интеграция с PubChem для получения и отображения трехмерных структур химических соединений.
 - **Интеллектуальный помощник**: Автоматический перевод химических терминов и формул для поиска в международных базах данных.
 - **Панель администратора**: Управление пользователями и данными через удобный интерфейс (SQLAdmin).
@@ -18,11 +18,8 @@
 - **База данных**: PostgreSQL (через SQLAlchemy ORM)
 - **Миграции**: Alembic
 - **Админ панель**: SQLAdmin
-- **ИИ**: Ollama (модель phi3)
+- **ИИ**: GigaChat API
 - **Валидация**: Pydantic v2
-
-### Архитектура базы данных (ER-диаграмма)
-![Database ER Diagram](ER.png)
 
 ### Фронтенд (Frontend)
 - **Язык**: JavaScript / TypeScript
@@ -48,85 +45,68 @@ VizChemLab/
 │   └── App.js          # Основной компонент
 ├── alembic/            # Миграции базы данных
 ├── requirements.txt    # Зависимости Python
-└── alembic.ini         # Конфигурация Alembic
+├── Dockerfile.backend  # Dockerfile для бэкенда
+├── frontend/Dockerfile.frontend # Dockerfile для фронтенда
+└── docker-compose.yml  # Файл для развертывания всего проекта
 ```
 
-## ⚙️ Установка и запуск
+## ⚙️ Установка и запуск через Docker (Рекомендуется)
+
+1. Клонируйте репозиторий.
+2. Создайте файл `.env` в корневой папке проекта:
+   ```env
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=your_secure_password
+   POSTGRES_DB=vizchemlab
+   SECRET_KEY=your_secret_key
+   SMTP_USER=your_email@yandex.ru
+   SMTP_PASSWORD=your_app_password
+   GIGACHAT_CLIENT_ID=019cd259-c72e-75cb-84b9-b0588a762d74
+   GIGACHAT_AUTH_KEY=MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjE3NDlkZDg5LTI1MGMtNDFhNy05ZDYzLWE1MzIyMzUyMGIxZg==
+   ```
+3. Запустите проект:
+   ```bash
+   docker-compose up -d --build
+   ```
+4. Проект будет доступен:
+   - Фронтенд: `http://localhost`
+   - Бэкенд API: `http://localhost:8000`
+   - Документация API: `http://localhost:8000/docs`
+
+## 🛠 Локальная установка и запуск (без Docker)
 
 ### Предварительные требования
 - Python 3.10+
 - Node.js & npm
 - PostgreSQL
-- [Ollama](https://ollama.ai/) (с установленной моделью `phi3`)
-
-### Настройка базы данных
-
-Для удобного управления базой данных используйте скрипт `manage_db.py`:
-
-- **Применить миграции**:
-  ```bash
-  python manage_db.py migrate
-  ```
-- **Заполнить базу данными (Периодическая таблица, типы связей)**:
-  ```bash
-  python manage_db.py seed
-  ```
-- **Полная настройка (миграции и данные)**:
-  ```bash
-  python manage_db.py setup
-  ```
 
 ### Настройка Бэкенда
 
-1. Клонируйте репозиторий.
-2. Создайте виртуальное окружение:
+1. Создайте виртуальное окружение и установите зависимости:
    ```bash
    python -m venv venv
-   source venv/bin/activate  # для Linux/macOS
-   venv\Scripts\activate     # для Windows
-   ```
-3. Установите зависимости:
-   ```bash
+   source venv/bin/activate  # Linux/macOS
    pip install -r requirements.txt
    ```
-4. Создайте файл `.env` в папке `VizChemLab/` на основе `app/core/config.py`:
-   ```env
-   DATABASE_URL=postgresql://user:password@localhost/dbname
-   SMTP_USER=your_email@yandex.ru
-   SMTP_PASSWORD=your_app_password
-   SECRET_KEY=your_secret_key
-   ```
-5. Примените миграции:
+2. Создайте файл `.env` (см. пример выше).
+3. Примените миграции и заполните БД:
    ```bash
-   alembic upgrade head
+   python manage_db.py setup
    ```
-6. Запустите сервер:
+4. Запустите сервер:
    ```bash
    python app/main.py
    ```
-   Бэкенд будет доступен по адресу `http://localhost:8000`.
 
 ### Настройка Фронтенда
 
-1. Перейдите в директорию `frontend`:
+1. Перейдите в `frontend`, установите зависимости и запустите:
    ```bash
    cd frontend
-   ```
-2. Установите зависимости:
-   ```bash
    npm install
-   ```
-3. Запустите режим разработки:
-   ```bash
    npm run dev
    ```
-   Фронтенд будет доступен по адресу `http://localhost:5173` (или указанному в консоли).
 
 ## Использование ИИ
 
-Для работы симулятора реакций необходимо запустить Ollama:
-```bash
-ollama run phi3
-```
-Приложение ожидает, что Ollama запущена на `http://localhost:11434`.
-
+Проект использует **GigaChat API** для генерации и уравнивания химических реакций. Для работы необходимы `GIGACHAT_CLIENT_ID` и `GIGACHAT_AUTH_KEY`, которые указываются в `.env` файле.

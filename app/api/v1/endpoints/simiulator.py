@@ -1,14 +1,47 @@
 import re
 import httpx
+import uuid
 from fastapi import APIRouter, Body, HTTPException
 from fractions import Fraction
 from math import gcd
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
+from app.core.config import settings
 
 router = APIRouter()
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "phi3"
+# GigaChat API endpoints
+GIGACHAT_AUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+GIGACHAT_COMPLETIONS_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+
+# Global variable to store access token and its expiry
+_gigachat_token: Optional[str] = None
+
+async def get_gigachat_token() -> str:
+    """Получает или обновляет токен GigaChat API."""
+    global _gigachat_token
+    if _gigachat_token:
+        return _gigachat_token
+
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'Authorization': f'Basic {settings.GIGACHAT_AUTH_KEY}'
+    }
+    payload = {'scope': settings.GIGACHAT_SCOPE}
+
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=20) as client:
+            print(f"Auth Request to {GIGACHAT_AUTH_URL} with payload {payload}")
+            response = await client.post(GIGACHAT_AUTH_URL, headers=headers, data=payload)
+            print(f"Auth Response: {response.status_code} - {response.text}")
+            response.raise_for_status()
+            data = response.json()
+            _gigachat_token = data.get("access_token")
+            if not _gigachat_token:
+                raise HTTPException(status_code=500, detail="Failed to get GigaChat token")
+            return _gigachat_token
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GigaChat Auth Error: {str(e)}")
 
 SIMULATOR_FALLBACKS = {
     "H2+O2": "2H2 + O2 → 2H2O",
@@ -217,6 +250,7 @@ def balance_equation(eq: str) -> str:
     return f"{left_part} → {right_part}"
 
 async def _generate_reaction(reactants: str) -> str:
+    print(f"DEBUG: Generating reaction for: {reactants}")
     prompt = (
         "You are an expert organic and inorganic chemist.\n"
         f"Request: {reactants}\n"
@@ -236,29 +270,59 @@ async def _generate_reaction(reactants: str) -> str:
         "Balanced Equation:"
     )
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(
-                OLLAMA_URL,
-                json={
-                    "model": MODEL_NAME,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.1, "num_predict": 80},
+        token = await get_gigachat_token()
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {token}'
+        }
+        
+        payload = {
+            "model": "GigaChat",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an expert organic and inorganic chemist."
                 },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.1,
+            "top_p": 0.1,
+            "n": 1,
+            "stream": False,
+            "max_tokens": 100,
+            "repetition_penalty": 1
+        }
+
+        async with httpx.AsyncClient(timeout=120, verify=False) as client:
+            response = await client.post(
+                GIGACHAT_COMPLETIONS_URL,
+                headers=headers,
+                json=payload
             )
             response.raise_for_status()
-            raw = response.json().get("response", "")
+            data = response.json()
+            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             cleaned = clean_equation(raw)
             return cleaned
     except httpx.HTTPStatusError as exc:
+        # Если токен протух, сбрасываем его
+        if exc.response.status_code == 401:
+            global _gigachat_token
+            _gigachat_token = None
+        print(f"GigaChat API Error: {exc.response.text}")
         raise HTTPException(
             status_code=502,
-            detail=f"Ошибка ответа модели: {exc.response.text}",
+            detail=f"Ошибка ответа GigaChat API: {exc.response.text}",
         ) from exc
     except httpx.RequestError as exc:
+        print(f"GigaChat Request Error: {exc}")
         raise HTTPException(
             status_code=502,
-            detail=f"Сервис модели недоступен: {exc}",
+            detail=f"GigaChat API недоступен: {exc}",
         ) from exc
 
 
@@ -315,7 +379,7 @@ async def simulate_reaction(reactants: str = Body(..., embed=True)):
     if not raw_equation:
         raise HTTPException(
             status_code=500,
-            detail="Не удалось получить уравнение реакции. Убедитесь, что Ollama запущена.",
+            detail="Не удалось получить уравнение реакции. Проверьте подключение к GigaChat API.",
         )
 
     input_elements = set(re.findall(r"[A-Z][a-z]?", reactants))
