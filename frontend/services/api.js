@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/', 
+  baseURL: import.meta.env.VITE_API_URL || '/',
   withCredentials: true, // Essential for handling the session_id cookie
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',
