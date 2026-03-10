@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Dict, List, Tuple, Optional
 from app.core.config import settings
+import time
 
 router = APIRouter()
 
@@ -13,34 +14,64 @@ router = APIRouter()
 GIGACHAT_AUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 GIGACHAT_COMPLETIONS_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
 
-# Global variable to store access token and its expiry
+# Global variables to store access token and its expiry
 _gigachat_token: Optional[str] = None
+_gigachat_token_expiry: Optional[float] = None
 
 async def get_gigachat_token() -> str:
-    """Получает или обновляет токен GigaChat API."""
-    global _gigachat_token
-    if _gigachat_token:
+    """Получает или обновляет токен GigaChat API с автообновлением."""
+    global _gigachat_token, _gigachat_token_expiry
+    
+    current_time = time.time()
+    
+    # Если токен есть и не истек (30 минут - 1800 секунд), используем его
+    if _gigachat_token and _gigachat_token_expiry and current_time < _gigachat_token_expiry:
         return _gigachat_token
+    
+    print("Getting new GigaChat token...")
 
+    # Правильные заголовки согласно документации GigaChat
     headers = {
+        'Authorization': f'Basic {settings.GIGACHAT_AUTH_KEY}',
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
-        'Authorization': f'Basic {settings.GIGACHAT_AUTH_KEY}'
+        'RqUID': '550e8400-e29b-41d4-a716-446655440000'  # Обязательный UUID
     }
-    payload = {'scope': settings.GIGACHAT_SCOPE}
-
+    
+    # Правильный payload
+    payload = 'scope=GIGACHAT_API_PERS'
+    
     try:
-        async with httpx.AsyncClient(verify=False, timeout=20) as client:
-            print(f"Auth Request to {GIGACHAT_AUTH_URL} with payload {payload}")
-            response = await client.post(GIGACHAT_AUTH_URL, headers=headers, data=payload)
-            print(f"Auth Response: {response.status_code} - {response.text}")
-            response.raise_for_status()
-            data = response.json()
-            _gigachat_token = data.get("access_token")
-            if not _gigachat_token:
-                raise HTTPException(status_code=500, detail="Failed to get GigaChat token")
-            return _gigachat_token
+        print(f"GigaChat auth request")
+        print(f"URL: {GIGACHAT_AUTH_URL}")
+        print(f"Headers: {headers}")
+        print(f"Payload: {payload}")
+        
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            response = await client.post(GIGACHAT_AUTH_URL, headers=headers, content=payload)
+            print(f"Response status: {response.status_code}")
+            print(f"Response body: {response.text}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                _gigachat_token = data.get("access_token")
+                expires_in = data.get("expires_in", 1800)  # по умолчанию 30 минут
+                
+                if _gigachat_token:
+                    # Устанавливаем время истечения за 5 минут до реального, для перестраховки
+                    _gigachat_token_expiry = current_time + expires_in - 300
+                    print(f"SUCCESS! Token received, expires in {expires_in}s")
+                    return _gigachat_token
+                else:
+                    print("No access_token in response")
+                    raise HTTPException(status_code=500, detail="No access token in GigaChat response")
+            else:
+                print(f"GigaChat auth failed: {response.status_code}")
+                print(f"Error details: {response.text}")
+                raise HTTPException(status_code=500, detail=f"GigaChat Auth Error: {response.status_code} - {response.text}")
+                
     except Exception as e:
+        print(f"GigaChat token error: {e}")
         raise HTTPException(status_code=500, detail=f"GigaChat Auth Error: {str(e)}")
 
 SIMULATOR_FALLBACKS = {
@@ -311,8 +342,9 @@ async def _generate_reaction(reactants: str) -> str:
     except httpx.HTTPStatusError as exc:
         # Если токен протух, сбрасываем его
         if exc.response.status_code == 401:
-            global _gigachat_token
+            global _gigachat_token, _gigachat_token_expiry
             _gigachat_token = None
+            _gigachat_token_expiry = None
         print(f"GigaChat API Error: {exc.response.text}")
         raise HTTPException(
             status_code=502,

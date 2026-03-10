@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "0.0.0.0:5433:5432"
 
   backend:
     build:
@@ -33,7 +33,7 @@ services:
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjE3NDlkZDg5LTI1MGMtNDFhNy05ZDYzLWE1MzIyMzUyMGIxZg==}
       PYTHONPATH: .
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     command: >
       sh -c "python manage_db.py seed && 
              python app/main.py"
@@ -47,7 +47,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "0.0.0.0:80:80"
 
 volumes:
   postgres_data:

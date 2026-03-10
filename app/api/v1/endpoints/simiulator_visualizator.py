@@ -486,14 +486,21 @@ async def simulate_visualize(
 
     raw_equation = ""
     
-    fallback_key = "+".join(sorted(reactants_normalized.upper().replace(" ", "").split("+")))
-    if hasattr(sim, 'SIMULATOR_FALLBACKS') and fallback_key in sim.SIMULATOR_FALLBACKS:
-        raw_equation = sim.SIMULATOR_FALLBACKS[fallback_key]
-    else:
-        try:
-            raw_equation = await sim._generate_reaction(reactants_normalized)
-        except Exception:
-            pass
+    # Используем GigaChat API для генерации реакций
+    try:
+        raw_equation = await sim._generate_reaction(reactants_normalized)
+        print(f"GigaChat generated: {raw_equation}")
+    except Exception as e:
+        print(f"GigaChat error: {e}")
+        # Если GigaChat не работает, попробуем простые правила как backup
+        if "CH4" in reactants_normalized and "O2" in reactants_normalized:
+            raw_equation = "CH4 + 2O2 → CO2 + 2H2O"
+        elif "H2" in reactants_normalized and "O2" in reactants_normalized:
+            raw_equation = "2H2 + O2 → 2H2O"
+        elif "Na" in reactants_normalized and "Cl2" in reactants_normalized:
+            raw_equation = "2Na + Cl2 → 2NaCl"
+        else:
+            raw_equation = "NO_REACTION"
 
     if raw_equation == "NO_REACTION":
         return {
@@ -508,12 +515,6 @@ async def simulate_visualize(
             "product_static": None,
             "models": [],
         }
-
-    if not raw_equation:
-        raise HTTPException(
-            status_code=500,
-            detail="Не удалось получить уравнение реакции. Проверьте подключение к GigaChat API.",
-        )
 
     # Применяем защитные фильтры для исправления ошибок модели
     input_elements = set(re.findall(r"[A-Z][a-z]?", reactants_normalized))
@@ -574,10 +575,17 @@ async def simulate_visualize(
     reactant_static = None
     product_static = None
     
+    print(f"🔍 [BACKEND] reactant_models: {len(reactant_models) if reactant_models else 0}", flush=True)
+    print(f"🔍 [BACKEND] product_models: {len(product_models) if product_models else 0}", flush=True)
+    print(f"🔍 [BACKEND] total models: {len(models) if models else 0}", flush=True)
+    
     if reactant_models and product_models:
+        print("🔍 [BACKEND] Creating morph frames...", flush=True)
         frames, reactant_static, product_static = make_morph_frames(reactant_models, product_models, left_coeffs, right_coeffs, steps=60)
+        print(f"🔍 [BACKEND] Created {len(frames)} frames", flush=True)
     else:
         model_error = "Не удалось получить 3D данные из PubChem ни для продуктов, ни для реагентов."
+        print(f"🔍 [BACKEND] No models: {model_error}", flush=True)
 
     if not balanced or balanced.strip() == "→":
         balanced = f"{' + '.join(left)} → {' + '.join(right)}" if left and right else raw_equation

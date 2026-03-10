@@ -421,7 +421,7 @@ const Simulator = () => {
               return;
           }
           if (!viewerRef.current) return;
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#f8faff' });
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' });
       }
 
       let currentFrame;
@@ -450,11 +450,11 @@ const Simulator = () => {
       // Инициализируем viewer только если его еще нет
       if (!v3dRef.current) {
         try {
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: bgColor }, null, true);
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' }, null, true);
         } catch (err) {
           console.error('createViewer (noWebGL) error:', err);
           try {
-            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: bgColor, viewerType: 'canvas' }, null, true);
+            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000', viewerType: 'canvas' }, null, true);
           } catch (err2) {
             console.error('createViewer (viewerType canvas) error:', err2);
           }

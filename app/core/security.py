@@ -3,7 +3,7 @@ from itsdangerous import URLSafeTimedSerializer
 from app.core.config import settings
 
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)

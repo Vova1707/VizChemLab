@@ -5,7 +5,6 @@ from fastapi.templating import Jinja2Templates
 
 from sqlalchemy.orm import Session
 
-from passlib.context import CryptContext
 from app.db.session import get_db
 from app.db.models import User
 from app.core.security import get_password_hash, verify_password, generate_verification_token, generate_password_reset_token, verify_password_reset_token
@@ -17,7 +16,6 @@ from app.api.v1.deps import get_current_user, get_current_user_optional
 
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 templates = Jinja2Templates(directory="app/templates/")
 
 

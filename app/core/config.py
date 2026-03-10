@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # GigaChat API
     GIGACHAT_CLIENT_ID: Optional[str] = "019cd259-c72e-75cb-84b9-b0588a762d74"
-    GIGACHAT_AUTH_KEY: Optional[str] = "MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjE3NDlkZDg5LTI1MGMtNDFhNy05ZDYzLWE1MzIyMzUyMGIxZg=="
+    GIGACHAT_AUTH_KEY: Optional[str] = "MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjhhZTg0NWY0LTdmZDEtNGIxYy05YTYxLTc4Mzg5YTJjMWIyNA=="
     GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
 
     model_config = {
