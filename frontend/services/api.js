@@ -1,8 +1,18 @@
 
 import axios from 'axios';
 
+// Determine API URL based on environment
+const getApiUrl = () => {
+  // In production, use the backend URL directly
+  if (import.meta.env.PROD) {
+    return 'https://vizchemlab-backend.onrender.com/api';
+  }
+  // In development, use proxy
+  return '/api';
+};
+
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL || ''}/api`,
+  baseURL: getApiUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',
