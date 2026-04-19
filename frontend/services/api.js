@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/',
+  baseURL: `${import.meta.env.VITE_API_URL || ''}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -19,7 +19,7 @@ export const toFormData = (data) => {
 
 export const getSessionData = async () => {
   try {
-    const response = await api.get('/api/session/get');
+    const response = await api.get('/session/get');
     return response.data.data;
   } catch (error) {
     console.error('Error fetching session data:', error);
@@ -29,7 +29,7 @@ export const getSessionData = async () => {
 
 export const setSessionData = async (data) => {
   try {
-    await api.post('/api/session/set', data, {
+    await api.post('/session/set', data, {
       headers: {
         'Content-Type': 'application/json'
       }
