@@ -16,8 +16,8 @@ RUN npm run build
 # Production stage - use different nginx approach
 FROM alpine:3.18 as production-stage
 
-# Install nginx explicitly
-RUN apk add --no-cache nginx
+# Install nginx explicitly and update package index
+RUN apk update && apk add --no-cache nginx
 
 # Copy the build output to nginx's public directory
 COPY --from=build-stage /app/dist /usr/share/nginx/html
@@ -25,12 +25,15 @@ COPY --from=build-stage /app/dist /usr/share/nginx/html
 # Copy a custom nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Make sure nginx can write to logs
+# Make sure nginx can write to logs and create necessary directories
 RUN mkdir -p /var/log/nginx && \
+    mkdir -p /var/cache/nginx && \
+    mkdir -p /var/run && \
     chown -R nginx:nginx /var/log/nginx && \
+    chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /usr/share/nginx/html
 
 EXPOSE 80
 
-# Use full path to nginx
+# Use full path to nginx with proper daemon off
 CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
