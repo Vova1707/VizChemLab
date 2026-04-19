@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+jinja2
+sqladmin
+itsdangerous
+email-validator
+aiosmtplib
+httpx
+numpy

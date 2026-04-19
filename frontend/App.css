@@ -6,6 +6,7 @@
   --bg-card: #ffffff;
   --text-main: #0f172a;
   --text-secondary: #64748b;
+  --text-inverse: #374151; /* Темный для светлой темы */
   --border: #e2e8f0;
   --error: #ef4444;
   --success: #10b981;
@@ -29,6 +30,7 @@
   --bg-card: #1e293b;
   --text-main: #f1f5f9;
   --text-secondary: #94a3b8;
+  --text-inverse: #f1f5f9; /* Светлый для темной темы */
   --border: #334155;
   --error: #f87171;
   --success: #4ade80;

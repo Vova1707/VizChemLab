@@ -14,3 +14,5 @@ aiosmtplib
 itsdangerous
 httpx
 numpy
+fastapi-users[sqlalchemy]
+PyJWT

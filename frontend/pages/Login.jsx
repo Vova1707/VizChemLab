@@ -18,7 +18,6 @@ const Login = () => {
     e.preventDefault();
     setError('');
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError('Пожалуйста, введите корректный email адрес.');
@@ -28,9 +27,12 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      console.log('Attempting login with:', formData.email);
+      const result = await login(formData.email, formData.password);
+      console.log('Login successful:', result);
       navigate('/profile');
     } catch (err) {
+      console.error('Login error:', err);
       setError('Неверная почта или пароль. Попробуйте еще раз!');
     } finally {
       setLoading(false);

@@ -12,7 +12,6 @@ import ResetPassword from './pages/ResetPassword.jsx';
 import Visualizer from './pages/Visualizer.jsx';
 import Simulator from './pages/Simulator.jsx';
 import Builder from './pages/Builder.jsx';
-import VerifyEmail from './pages/VerifyEmail.jsx';
 
 const App = () => {
   return (
@@ -26,7 +25,6 @@ const App = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/visualizer" element={<Visualizer />} />
           <Route path="/simulator" element={<Simulator />} />
           <Route path="/builder" element={<Builder />} />

@@ -3,13 +3,12 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/',
-  withCredentials: true, // Essential for handling the session_id cookie
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',
   },
 });
 
-// Helper to transform object to URLSearchParams for FastAPI Form data
 export const toFormData = (data) => {
   const formData = new URLSearchParams();
   for (const key in data) {
@@ -18,7 +17,6 @@ export const toFormData = (data) => {
   return formData;
 };
 
-// Session management
 export const getSessionData = async () => {
   try {
     const response = await api.get('/api/session/get');
@@ -41,7 +39,6 @@ export const setSessionData = async (data) => {
   }
 };
 
-// New helper for partial updates that fetches current data first to avoid overwriting
 export const updateSessionData = async (updates) => {
   try {
     const currentData = await getSessionData();

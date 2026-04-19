@@ -183,5 +183,32 @@ cython_debug/
 # macOS
 .DS_Store
 
-# macOS
-.DS_Store
+# Security - Environment variables and secrets
+.env
+.env.local
+.env.*.local
+.env.backup
+.env.production
+.env.development
+config/secrets.yaml
+**/secrets/
+**/.env*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+app.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE and editor files
+.vscode/settings.json
+.idea/workspace.xml

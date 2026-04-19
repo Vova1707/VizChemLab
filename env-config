@@ -1,0 +1,20 @@
+# Database Configuration
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=vizchemlab
+
+# Application Configuration
+SECRET_KEY=your-secret-key-change-this-in-production
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8000
+
+# Email Configuration (Optional)
+SMTP_USER=
+SMTP_PASSWORD=
+
+# GigaChat API Configuration
+GIGACHAT_CLIENT_ID=019cd259-c72e-75cb-84b9-b0588a762d74
+GIGACHAT_AUTH_KEY=MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjcxNjY5MmNiLTA2M2ItNGI0Yi1hOGI4LWYxMmM2MGNmNGEyNg==
+
+# Gemini API Configuration (Optional)
+GEMINI_API_KEY=

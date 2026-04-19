@@ -11,7 +11,6 @@ const toPretty = (eq = '') => {
   });
 };
 
-// Динамически подключаем 3Dmol.js (CDN)
 const load3Dmol = () =>
   new Promise((resolve, reject) => {
     if (window.$3Dmol) return resolve(window.$3Dmol);
@@ -354,7 +353,7 @@ const Simulator = () => {
       const res = await fetch('/api/simulate-visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reactants: queryToUse.trim() })
+        body: JSON.stringify(queryToUse.trim())
       });
 
       const data = await res.json().catch(() => ({}));
@@ -651,7 +650,6 @@ const Simulator = () => {
 
   return (
     <div className="page-layout">
-      {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div style={{
           position: 'fixed',
@@ -694,7 +692,6 @@ const Simulator = () => {
         </div>
       )}
 
-      {/* Sidebar */}
       {user && (
         <div className="glass-card sidebar">
           <h2 className="section-header">
@@ -770,7 +767,6 @@ const Simulator = () => {
         </div>
       )}
 
-      {/* Main Content */}
       <div className="glass-card main-content" style={{ width: '100%', maxWidth: '100%' }}>
         <div className="scrollable-content custom-scrollbar">
           <div style={{ marginBottom: '24px', textAlign: 'center' }}>
@@ -823,7 +819,6 @@ const Simulator = () => {
               borderRadius: 12,
               border: isDark ? '1px solid var(--border)' : '1.5px solid #c8d8f0'
             }}>
-              {/* Tabs */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 10 }}>
                   {['3d', 'charts'].map(tab => (
@@ -846,7 +841,6 @@ const Simulator = () => {
                 </div>
               </div>
 
-              {/* Charts & Information */}
               {activeTab === 'charts' && (
                 <div className="simulation-info-tab">
                   <SimulationCharts equation={equation} fps={fps} />
@@ -911,7 +905,6 @@ const Simulator = () => {
                 </div>
               )}
 
-              {/* 3D Content */}
               {activeTab === '3d' && (
                 <>
                   <div style={{ fontWeight: 600, marginBottom: 10, textAlign: 'center', color: isDark ? 'var(--text-main)' : '#1b257a' }}>

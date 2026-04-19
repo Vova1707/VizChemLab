@@ -9,7 +9,7 @@ const Builder = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Константы из БД
+  // Константы
   const [periodicTable, setPeriodicTable] = useState([]);
   const [bondTypes, setBondTypes] = useState([]);
   const [isLoadingConstants, setIsLoadingConstants] = useState(true);
@@ -69,7 +69,6 @@ const Builder = () => {
     }
   }, [isLoaded, user]);
 
-  // Синхронизация состояний с сессией с дебаунсом
   useEffect(() => {
     const timer = setTimeout(() => {
       saveSession({ atoms });
@@ -92,7 +91,6 @@ const Builder = () => {
     saveSession({ fetchedSdf, selectedResultIndex });
   }, [fetchedSdf, selectedResultIndex, saveSession]);
 
-  // Загрузка констант из БД
   const loadConstants = useCallback(async () => {
     setIsLoadingConstants(true);
     try {
@@ -101,7 +99,6 @@ const Builder = () => {
       const data = await response.json();
       setPeriodicTable(data.periodic_table);
       
-      // Добавляем стерео-связи вручную, если их нет в БД
       const baseBondTypes = data.bond_types.filter((v, i, a) => a.findIndex(t => t.label === v.label) === i);
       const extendedBondTypes = [...baseBondTypes];
       
@@ -114,7 +111,6 @@ const Builder = () => {
       
       setBondTypes(extendedBondTypes);
       
-      // Устанавливаем значения по умолчанию после загрузки
       if (data.periodic_table.length > 0) {
         const carbon = data.periodic_table.find(e => e.symbol === 'C') || data.periodic_table[0];
         setSelectedElement(carbon);
@@ -170,7 +166,6 @@ const Builder = () => {
 
   const [fragmentData, setFragmentData] = useState([]);
 
-  // Вычисляем фрагменты при каждом изменении атомов или связей
   const detectedFragments = useMemo(() => {
     if (atoms.length === 0) return [];
     
@@ -211,7 +206,6 @@ const Builder = () => {
         counts[a.element] = (counts[a.element] || 0) + 1;
       }
     });
-    // Hill system: C first, then H, then alphabetical
     const elements = Object.keys(counts);
     const sortedElements = elements.sort((a, b) => {
       if (a === 'C' && b !== 'C') return -1;
@@ -699,7 +693,6 @@ const Builder = () => {
     <div className="builder-container">
       <div className="glass-card builder-layout">
         <div style={{ display: 'flex', gap: '24px', flex: 1 }}>
-          {/* Панель инструментов */}
           <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div className="glass-card tool-panel">
               <div className="tool-header">
@@ -888,14 +881,12 @@ const Builder = () => {
             </div>
           </div>
 
-          {/* Рабочая область */}
           <div style={{ 
             flex: 1, 
             display: 'flex',
             flexDirection: 'column',
             gap: '16px'
           }}>
-            {/* Вкладки переключения режимов */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div className="glass-card" style={{ 
                 flex: 1,
@@ -989,7 +980,6 @@ const Builder = () => {
               display: 'flex',
               transition: 'all 0.3s ease'
             }}>
-              {/* 2D Конструктор */}
               <div style={{ 
                 width: isSplitView ? '50%' : (activeTab === '2D' ? '100%' : '0%'),
                 display: (activeTab === '2D' || isSplitView) ? 'block' : 'none',
@@ -1010,7 +1000,6 @@ const Builder = () => {
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                 >
-                  {/* Сетка для удобства */}
                   <defs>
                     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                       <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.03)" strokeWidth="1"/>
@@ -1018,7 +1007,6 @@ const Builder = () => {
                   </defs>
                   <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />
 
-                  {/* Подсветка фрагментов (молекул) */}
                   {detectedFragments.map((fragment, idx) => {
                     if (fragment.length < 1) return null;
                     const formula = getFormula(fragment);
@@ -1050,7 +1038,6 @@ const Builder = () => {
                     );
                   })}
 
-                  {/* Призрачная связь (превью) */}
                   {selectedAtomId && activeTool === 'bond' && (
                     (() => {
                       const s = atoms.find(a => a.id === selectedAtomId);
@@ -1068,7 +1055,6 @@ const Builder = () => {
                     })()
                   )}
 
-                  {/* Отрисовка связей */}
                   {bonds.map((bond, i) => {
                     const s = atoms.find(a => a.id === bond.source);
                     const t = atoms.find(a => a.id === bond.target);
@@ -1161,7 +1147,6 @@ const Builder = () => {
                       </g>
                     );
                   })}
-                  {/* Отрисовка атомов */}
                   {atoms.map(atom => {
                     const displayRadius = 12 + (atom.radius * 12);
                     
@@ -1201,7 +1186,6 @@ const Builder = () => {
                 </svg>
               </div>
 
-              {/* 3D Визуализация */}
               <div style={{ 
                 flex: (activeTab !== '2D' || isSplitView) ? 1 : 0,
                 display: (activeTab !== '2D' || isSplitView) ? 'flex' : 'none',
@@ -1210,7 +1194,6 @@ const Builder = () => {
                 position: 'relative',
                 transition: 'flex 0.3s ease'
               }}>
-                {/* Список результатов в режиме БД */}
                 {activeTab === 'DB' && fetchedSdf && (
                   <div style={{
                     width: '240px',

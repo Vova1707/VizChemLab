@@ -16,12 +16,14 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: vizchemlab-backend
     restart: always
     depends_on:
       - db
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-vizchemlab}
       SECRET_KEY: ${SECRET_KEY:-your-secret-key}
@@ -29,14 +31,14 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8000
-      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-019cd259-c72e-75cb-84b9-b0588a762d74}
-      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-MDE5Y2QyNTktYzcyZS03NWNiLTg0YjktYjA1ODhhNzYyZDc0OjE3NDlkZDg5LTI1MGMtNDFhNy05ZDYzLWE1MzIyMzUyMGIxZg==}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
       PYTHONPATH: .
     ports:
       - "0.0.0.0:8000:8000"
     command: >
       sh -c "python manage_db.py seed && 
-             python app/main.py"
+             python main.py"
 
   frontend:
     build:

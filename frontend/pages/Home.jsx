@@ -18,9 +18,6 @@ const Home = () => {
         <p>Исследуйте мир химии с помощью профессиональных инструментов визуализации и симуляции.</p>
       </div>
 
-      {/* Social Section Removed */}
-
-      {/* Stats Cards */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
@@ -65,12 +62,10 @@ const Home = () => {
         ))}
       </div>
 
-      {/* Tools Grid */}
       <div className="dashboard-grid">
-        {/* Visualizer */}
         <div className="dashboard-card tool-card">
           <div className="card-icon visualizer-icon" style={{ width: '64px', height: '64px', borderRadius: '18px' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-inverse)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
               <circle cx="12" cy="12" r="3" />
@@ -81,10 +76,9 @@ const Home = () => {
           <p>Интерактивный 3D-рендеринг химических структур. Вращайте и изучайте геометрию молекул в высоком разрешении.</p>
           <Link to="/visualizer" className="btn btn-primary" style={{ borderRadius: '12px' }}>Запустить 3D</Link>
         </div>
-        {/* Simulator */}
         <div className="dashboard-card tool-card">
           <div className="card-icon simulator-icon" style={{ width: '64px', height: '64px', borderRadius: '18px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-inverse)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               <circle cx="12" cy="12" r="5" />
             </svg>
@@ -93,10 +87,9 @@ const Home = () => {
           <p>Симулируйте динамические химические процессы и наблюдайте за поведением частиц в различных условиях.</p>
           <Link to="/simulator" className="btn btn-success" style={{ borderRadius: '12px' }}>Открыть симуляцию</Link>
         </div>
-        {/* Builder */}
         <div className="dashboard-card tool-card">
           <div className="card-icon builder-icon" style={{ width: '64px', height: '64px', borderRadius: '18px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-inverse)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 19l7-7 3 3-7 7-3-3z" />
               <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
               <path d="M2 2l7.586 7.586" />

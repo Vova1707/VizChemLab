@@ -287,7 +287,6 @@ const Visualizer = () => {
 
   return (
     <div className="page-layout">
-      {/* Модальное окно подтверждения удаления */}
       {deleteConfirm && (
         <div className="modal-overlay">
           <div className="glass-card modal-content">
@@ -313,7 +312,6 @@ const Visualizer = () => {
         </div>
       )}
 
-      {/* Левая панель истории */}
       {user && (
         <div className="glass-card sidebar">
           <h2 className="section-header">
@@ -350,7 +348,6 @@ const Visualizer = () => {
         </div>
       )}
 
-      {/* Основная панель */}
       <div className="glass-card main-content" style={{ maxWidth: '100%', width: '100%' }}>
         <h1 style={{
           fontSize: 32,
@@ -407,7 +404,6 @@ const Visualizer = () => {
         />
       </div>
 
-      {/* Панель изомеров справа */}
       <div className="glass-card sidebar">
         <h2 className="section-header">
           <span className="status-dot" style={{ background: '#10b981' }}></span>
