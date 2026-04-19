@@ -16,6 +16,9 @@ RUN npm run build
 # Production stage
 FROM nginx:stable-alpine as production-stage
 
+# Install nginx if not present
+RUN apk add --no-cache nginx
+
 # Copy the build output to nginx's public directory
 COPY --from=build-stage /app/dist /usr/share/nginx/html
 
