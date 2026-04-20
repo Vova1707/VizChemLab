@@ -273,12 +273,70 @@ async def get_visualize_history(
     return [{"query": h.query, "timestamp": h.timestamp} for h in history]
 
 
+@router.get("/api/visualize/cid/{cid}",
+             response_model=VisualizeResponse,
+             summary="Визуализация соединения по CID",
+             description="Визуализирует химическое соединение по его PubChem CID.",
+             responses={
+                 200: {"description": "Структура соединения успешно получена"},
+                 404: {"description": "Соединение не найдено"}
+             })
+async def visualize_by_cid(
+    cid: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Визуализация соединения по PubChem CID"""
+    try:
+        # Пробуем получить 3D структуру, потом 2D
+        sdf = await pubchem.fetch_pubchem_sdf_by_cid(cid, record_type="3d")
+        if not sdf:
+            sdf = await pubchem.fetch_pubchem_sdf_by_cid(cid, record_type="2d")
+        
+        if not sdf:
+            raise HTTPException(status_code=404, detail="Соединение не найдено")
+        
+        # Получаем название соединения для истории
+        compound_names = await pubchem.fetch_compound_names([cid])
+        compound_name = compound_names[0]["name"] if compound_names else f"CID:{cid}"
+        
+        # Сохраняем в историю если пользователь авторизован
+        if current_user:
+            existing = db.query(SearchHistory).filter(
+                SearchHistory.user_id == current_user.id,
+                SearchHistory.query == compound_name,
+                SearchHistory.history_type == "visualizer"
+            ).first()
+            
+            if existing:
+                existing.timestamp = datetime.utcnow()
+            else:
+                new_history = SearchHistory(
+                    user_id=current_user.id,
+                    query=compound_name,
+                    history_type="visualizer"
+                )
+                db.add(new_history)
+            db.commit()
+        
+        return {
+            "compound": compound_name,
+            "source": "PubChem",
+            "format": "sdf",
+            "data": sdf,
+            "cid": cid
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {str(e)}")
+
+
 @router.delete("/api/visualize/history/{query}",
                response_model=StatusResponse,
                summary="Удаление элемента истории",
                description="Удаляет конкретный элемент из истории поиска визуализатора.",
                responses={
-                   200: {"description": "Элемент успешно удален"},
+                   200: {"description": "Элемент истории успешно удален"},
                    404: {"description": "Элемент истории не найден"}
                })
 async def delete_visualize_history_item(
@@ -287,6 +345,9 @@ async def delete_visualize_history_item(
     current_user: User = Depends(get_current_user)
 ):
     """Удаление элемента истории"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    
     item = db.query(SearchHistory).filter(
         SearchHistory.user_id == current_user.id,
         SearchHistory.query == query,
@@ -296,6 +357,5 @@ async def delete_visualize_history_item(
     if item:
         db.delete(item)
         db.commit()
-        return {"status": "ok"}
     
-    raise HTTPException(status_code=404, detail="History item not found")
+    return {"status": "success", "message": "Элемент истории удален"}

@@ -99,15 +99,25 @@ const Visualizer = () => {
     return () => clearTimeout(timer);
   }, [lastSdf, isLoaded, user]);
 
-  // Восстановление из сессии при монтировании
+  // Восстановление из сессии при монтировании (но не перезаписываем молекулу по умолчанию)
   useEffect(() => {
     const loadSession = async () => {
       try {
+        // Очищаем сохраненное значение C8H18 если оно есть
+        if (localStorage.getItem('viz_v5_molecule') === 'C8H18') {
+          localStorage.removeItem('viz_v5_molecule');
+          localStorage.removeItem('viz_v5_isomers');
+          localStorage.removeItem('viz_v5_lastSdf');
+        }
+        
         const data = await getSessionData();
         if (data) {
-          if (data.viz_v5_molecule) setMolecule(data.viz_v5_molecule);
+          // Восстанавливаем только если это не вода по умолчанию
+          if (data.viz_v5_molecule && data.viz_v5_molecule !== 'вода') {
+            setMolecule(data.viz_v5_molecule);
+          }
           if (data.viz_v5_isomers) setIsomers(data.viz_v5_isomers);
-          if (data.viz_v5_lastSdf) {
+          if (data.viz_v5_lastSdf && data.viz_v5_molecule !== 'вода') {
             setLastSdf(data.viz_v5_lastSdf);
             setTimeout(() => show3DMol(data.viz_v5_lastSdf), 500);
           }
@@ -511,6 +521,31 @@ const Visualizer = () => {
         </div>
       )}
 
+      {/* Desktop Isomers Sidebar */}
+      <div className="glass-card sidebar desktop-isomers">
+        <h2 className="section-header">
+          <span className="status-dot" style={{ background: '#10b981' }}></span>
+          Изомеры
+        </h2>
+        <div className="scrollable-content custom-scrollbar">
+          {isomers.length === 0 ? (
+            <div className="sidebar-empty-state">
+              Список пуст
+            </div>
+          ) : (
+            isomers.map((isomer) => (
+              <button
+                key={isomer.cid}
+                onClick={() => handleIsomerClick(isomer.cid)}
+                className="btn-isomer"
+              >
+                {isomer.name}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Mobile Isomers Sidebar */}
       <div className={`glass-card sidebar mobile-isomers ${mobileIsomersOpen ? 'open' : ''}`}>
         <div className="mobile-sidebar-header">
@@ -549,18 +584,6 @@ const Visualizer = () => {
             </div>
           )}
         </div>
-        
-        {isomers.length > 0 && (
-          <div style={{ 
-            fontSize: '12px', 
-            color: 'var(--text-secondary)', 
-            textAlign: 'center',
-            paddingTop: '8px',
-            borderTop: '1px solid var(--border)'
-          }}>
-            Найдено вариантов: {isomers.length}
-          </div>
-        )}
       </div>
     </div>
   );
