@@ -31,6 +31,8 @@ const Visualizer = () => {
     return localStorage.getItem('viz_v5_lastSdf');
   });
   const [isLoaded, setIsLoaded] = useState(false);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
+  const [mobileIsomersOpen, setMobileIsomersOpen] = useState(false);
   const viewerRef = useRef();
   const v3dRef = useRef(null);
 
@@ -402,13 +404,127 @@ const Visualizer = () => {
           ref={viewerRef}
           className="canvas-wrapper"
         />
+
+        {/* Mobile Sidebar Controls */}
+        <div className="mobile-sidebar-controls">
+          {user && (
+            <button 
+              className="mobile-sidebar-btn"
+              onClick={() => setMobileHistoryOpen(!mobileHistoryOpen)}
+            >
+              📚 История {history.length > 0 && `(${history.length})`}
+            </button>
+          )}
+          {isomers.length > 0 && (
+            <button 
+              className="mobile-sidebar-btn"
+              onClick={() => setMobileIsomersOpen(!mobileIsomersOpen)}
+            >
+              🔬 Изомеры ({isomers.length})
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="glass-card sidebar">
-        <h2 className="section-header">
-          <span className="status-dot" style={{ background: '#10b981' }}></span>
-          Изомеры
-        </h2>
+      {/* Mobile History Sidebar */}
+      {user && (
+        <div className={`glass-card sidebar mobile-history ${mobileHistoryOpen ? 'open' : ''}`}>
+          <div className="mobile-sidebar-header">
+            <h2 className="section-header">
+              <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
+              История
+            </h2>
+            <button 
+              className="mobile-close-sidebar"
+              onClick={() => setMobileHistoryOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="scrollable-content custom-scrollbar">
+            {history.length === 0 ? (
+              <div className="sidebar-empty-state">
+                История пуста
+              </div>
+            ) : (
+              history.map((item, idx) => (
+                <div key={idx} className="history-item">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(item.query);
+                    }}
+                    className="btn-delete-history"
+                  >
+                    ×
+                  </button>
+                  <button
+                    onClick={() => {
+                      performSearch(item.query);
+                      setMobileHistoryOpen(false);
+                    }}
+                    className="btn-isomer"
+                  >
+                    {item.query}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop History Sidebar */}
+      {user && (
+        <div className="glass-card sidebar desktop-history">
+          <h2 className="section-header">
+            <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
+            История
+          </h2>
+          <div className="scrollable-content custom-scrollbar">
+            {history.length === 0 ? (
+              <div className="sidebar-empty-state">
+                История пуста
+              </div>
+            ) : (
+              history.map((item, idx) => (
+                <div key={idx} className="history-item">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(item.query);
+                    }}
+                    className="btn-delete-history"
+                  >
+                    ×
+                  </button>
+                  <button
+                    onClick={() => performSearch(item.query)}
+                    className="btn-isomer"
+                  >
+                    {item.query}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Isomers Sidebar */}
+      <div className={`glass-card sidebar mobile-isomers ${mobileIsomersOpen ? 'open' : ''}`}>
+        <div className="mobile-sidebar-header">
+          <h2 className="section-header">
+            <span className="status-dot" style={{ background: '#10b981' }}></span>
+            Изомеры ({isomers.length})
+          </h2>
+          <button 
+            className="mobile-close-sidebar"
+            onClick={() => setMobileIsomersOpen(false)}
+          >
+            ✕
+          </button>
+        </div>
 
         <div className="scrollable-content custom-scrollbar">
           {isomers.length === 0 ? (
@@ -416,16 +532,21 @@ const Visualizer = () => {
               Список пуст
             </div>
           ) : (
-            isomers.map((isomer) => (
-              <button
-                key={isomer.cid}
-                onClick={() => handleIsomerClick(isomer.cid)}
-                className="btn-isomer"
-                style={{ marginBottom: '8px' }}
-              >
-                {isomer.name}
-              </button>
-            ))
+            <div className="isomers-grid">
+              {isomers.map((isomer) => (
+                <button
+                  key={isomer.cid}
+                  onClick={() => {
+                    handleIsomerClick(isomer.cid);
+                    setMobileIsomersOpen(false);
+                  }}
+                  className="isomer-card"
+                >
+                  <div className="isomer-name">{isomer.name}</div>
+                  <div className="isomer-cid">CID: {isomer.cid}</div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
         
