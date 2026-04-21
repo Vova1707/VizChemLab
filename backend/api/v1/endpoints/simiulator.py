@@ -49,8 +49,9 @@ async def get_gigachat_token() -> str:
     print("Getting new GigaChat token...")
 
     # Правильные заголовки согласно документации GigaChat
+    auth_key = settings.GIGACHAT_AUTH_KEY.get_secret_value().strip()
     headers = {
-        'Authorization': f'Basic {settings.GIGACHAT_AUTH_KEY.get_secret_value()}',
+        'Authorization': f'Basic {auth_key}',
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
         'RqUID': '99c62694-10a5-4f6f-8d2d-5759431d8f22'  # Обязательный UUID
