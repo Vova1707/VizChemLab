@@ -4,10 +4,11 @@ const API_BASE = '/api';
 export const getSessionData = async () => {
   try {
     const response = await fetch(`${API_BASE}/session/get`);
-    return await response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('API Error:', error);
-    return null;
+    return {};
   }
 };
 

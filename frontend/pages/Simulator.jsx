@@ -279,17 +279,21 @@ const Simulator = () => {
   useEffect(() => {
     const loadSession = async () => {
       const data = await getSessionData();
-      if (data.sim_v5_reactants) setReactants(data.sim_v5_reactants);
-      if (data.sim_v5_equation) setEquation(data.sim_v5_equation);
-      if (data.sim_v5_info) setInfo(data.sim_v5_info);
-      if (data.sim_v5_model) setModel(data.sim_v5_model);
-      if (data.sim_v5_models) setModels(data.sim_v5_models);
-      if (data.sim_v5_frames) setFrames(data.sim_v5_frames);
-      if (data.sim_v5_reactantStatic) setReactantStatic(data.sim_v5_reactantStatic);
-      if (data.sim_v5_productStatic) setProductStatic(data.sim_v5_productStatic);
-      if (data.sim_v5_frameIndex !== undefined) setFrameIndex(data.sim_v5_frameIndex);
-      if (data.sim_v5_fps !== undefined) setFps(data.sim_v5_fps);
-      if (data.sim_v5_viewMode) setViewMode(data.sim_v5_viewMode);
+      if (data && typeof data === 'object') {
+        if (data.sim_v5_reactants) setReactants(data.sim_v5_reactants);
+        if (data.sim_v5_equation) setEquation(data.sim_v5_equation);
+        if (data.sim_v5_info) setInfo(data.sim_v5_info);
+        if (data.sim_v5_model) setModel(data.sim_v5_model);
+        if (data.sim_v5_models) setModels(data.sim_v5_models);
+        if (data.sim_v5_frames) setFrames(data.sim_v5_frames);
+        if (data.sim_v5_reactantStatic) setReactantStatic(data.sim_v5_reactantStatic);
+        if (data.sim_v5_productStatic) setProductStatic(data.sim_v5_productStatic);
+      }
+      if (data && typeof data === 'object') {
+        if (data.sim_v5_frameIndex !== undefined) setFrameIndex(data.sim_v5_frameIndex);
+        if (data.sim_v5_fps !== undefined) setFps(data.sim_v5_fps);
+        if (data.sim_v5_viewMode) setViewMode(data.sim_v5_viewMode);
+      }
     };
     loadSession();
     fetchHistory();

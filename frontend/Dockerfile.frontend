@@ -1,4 +1,4 @@
-# Build stage - FORCE REBUILD FIX 2024-04-21-3
+# Build stage - RENDER DEPLOYMENT
 FROM node:18-alpine as build-stage
 
 WORKDIR /app
@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Set environment variable for API URL
+# Set environment variable for API URL (Render backend)
 ARG VITE_API_URL=https://vizchemlab-backend.onrender.com
 ENV VITE_API_URL=$VITE_API_URL
 
@@ -23,12 +23,8 @@ FROM nginx:alpine as production-stage
 # Copy built app
 COPY --from=build-stage /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration and entrypoint
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
-COPY nginx-entrypoint.sh /docker-entrypoint.sh
-
-# Make entrypoint script executable
-RUN chmod +x /docker-entrypoint.sh
+# Copy nginx configuration for Render (simple static proxy)
+COPY nginx-render.conf /etc/nginx/nginx.conf
 
 # Create necessary directories and set permissions
 RUN mkdir -p /var/log/nginx && \
@@ -38,9 +34,8 @@ RUN mkdir -p /var/log/nginx && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /var/run
 
-# Expose port
+# Expose port 80 for Render
 EXPOSE 80
 
-# Use custom entrypoint
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
+# Start nginx directly
+CMD ["nginx", "-g", "daemon off;"]

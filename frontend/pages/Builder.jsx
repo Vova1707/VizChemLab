@@ -31,18 +31,18 @@ const Builder = () => {
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const { data } = await getSessionData();
-        console.log("Session loaded in Builder:", data);
-        if (data && data.builder) {
-          if (data.builder.atoms) setAtoms(data.builder.atoms);
-          if (data.builder.bonds) setBonds(data.builder.bonds);
-          if (data.builder.activeTab) setActiveTab(data.builder.activeTab);
-          if (data.builder.fetchedSdf) {
-            console.log("Setting fetchedSdf from session:", data.builder.fetchedSdf);
-            setFetchedSdf(data.builder.fetchedSdf);
+        const sessionData = await getSessionData();
+        console.log("Session loaded in Builder:", sessionData);
+        if (sessionData && sessionData.builder) {
+          if (sessionData.builder.atoms) setAtoms(sessionData.builder.atoms);
+          if (sessionData.builder.bonds) setBonds(sessionData.builder.bonds);
+          if (sessionData.builder.activeTab) setActiveTab(sessionData.builder.activeTab);
+          if (sessionData.builder.fetchedSdf) {
+            console.log("Setting fetchedSdf from session:", sessionData.builder.fetchedSdf);
+            setFetchedSdf(sessionData.builder.fetchedSdf);
           }
-          if (data.builder.selectedResultIndex !== undefined) {
-            setSelectedResultIndex(data.builder.selectedResultIndex);
+          if (sessionData.builder.selectedResultIndex !== undefined) {
+            setSelectedResultIndex(sessionData.builder.selectedResultIndex);
           }
         }
       } catch (error) {
@@ -58,7 +58,7 @@ const Builder = () => {
   const saveSession = useCallback(async (updates) => {
     if (!isLoaded || !user) return;
     try {
-      const { data: currentData } = await getSessionData();
+      const currentData = await getSessionData();
       const builderData = {
         ...(currentData?.builder || {}),
         ...updates

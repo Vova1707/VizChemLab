@@ -111,7 +111,7 @@ const Visualizer = () => {
         }
         
         const data = await getSessionData();
-        if (data) {
+        if (data && typeof data === 'object') {
           // Восстанавливаем только если это не вода по умолчанию
           if (data.viz_v5_molecule && data.viz_v5_molecule !== 'вода') {
             setMolecule(data.viz_v5_molecule);
