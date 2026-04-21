@@ -49,7 +49,7 @@ async def get_gigachat_token() -> str:
     print("Getting new GigaChat token...")
 
     # Правильные заголовки согласно документации GigaChat
-    auth_key = settings.GIGACHAT_AUTH_KEY.get_secret_value().strip()
+    auth_key = settings.GIGACHAT_AUTH_KEY.get_secret_value().replace('\n', '').replace('\r', '').strip()
     headers = {
         'Authorization': f'Basic {auth_key}',
         'Content-Type': 'application/x-www-form-urlencoded',
