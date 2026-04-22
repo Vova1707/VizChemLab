@@ -381,13 +381,13 @@ const Visualizer = () => {
         </p>
 
         <form onSubmit={handleSubmit}
-          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, gap: 12 }}>
+          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, gap: 12, maxWidth: '600px', margin: '0 auto 32px auto' }}>
           <input
             value={molecule}
             onChange={e => setMolecule(e.target.value)}
             required
             className="form-input"
-            style={{ width: 320 }}
+            style={{ flex: 1, minWidth: '250px' }}
             placeholder="Например: caffeine или C8H10N4O2"
             autoFocus
           />

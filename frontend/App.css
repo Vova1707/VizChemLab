@@ -462,6 +462,15 @@ a:hover {
     top: auto !important;
     padding: 0 !important;
     min-height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .mobile-isomers-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: calc(60vh - 60px) !important;
+    padding: 16px !important;
   }
   
   .mobile-history.open,

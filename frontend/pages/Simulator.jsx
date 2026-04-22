@@ -771,8 +771,7 @@ const Simulator = () => {
         </div>
       )}
 
-      <div className="glass-card main-content" style={{ width: '100%', maxWidth: '100%' }}>
-        <div className="scrollable-content custom-scrollbar">
+      <div className="main-content" style={{ width: '100%', maxWidth: '100%', padding: '24px' }}>
           <div style={{ marginBottom: '24px', textAlign: 'center' }}>
             <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Симулятор реакций
@@ -892,19 +891,7 @@ const Simulator = () => {
                           </div>
                         ))}
                       </div>
-                      <div style={{ 
-                        marginTop: 25, 
-                        padding: 15, 
-                        borderRadius: 8, 
-                        background: 'rgba(255, 193, 7, 0.1)', 
-                        border: '1px solid rgba(255, 193, 7, 0.3)',
-                        fontSize: '0.9rem', 
-                        color: 'var(--text-secondary)', 
-                        textAlign: 'center' 
-                      }}>
-                        Примечание: Графики кинетики и энергии являются симуляцией на основе теоретических моделей. Физико-химические свойства веществ получены из открытых источников (PubChem).
-                      </div>
-                    </div>
+                                          </div>
                   )}
                 </div>
               )}
@@ -1050,8 +1037,7 @@ const Simulator = () => {
           {libError && <div className="error-message" style={{ marginTop: 12, textAlign: 'center', color: '#ff0000' }}>{libError}</div>}
           {modelError && <div className="warning-message" style={{ marginTop: 12, textAlign: 'center', color: '#c47b2d' }}>{modelError}</div>}
           {error && <div className="error-message" style={{ marginTop: 20 }}>{error}</div>}
-        </div>
-      </div>
+          </div>
     </div>
   );
 };
