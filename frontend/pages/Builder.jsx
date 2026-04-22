@@ -709,14 +709,6 @@ const Builder = () => {
                   {selectedElement?.symbol || '...'}
                 </span>
               </div>
-              
-              <input 
-                type="text" 
-                placeholder="Поиск элемента..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
-              />
 
               <div className="element-grid">
                 {isLoadingConstants ? (
@@ -749,6 +741,17 @@ const Builder = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="search-panel desktop-only" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px' }}>
+              <input 
+                type="text" 
+                placeholder="Поиск элемента..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+                style={{ width: '100%' }}
+              />
             </div>
 
             <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '20px' }}>
@@ -1407,6 +1410,24 @@ const Builder = () => {
               </div>
             </div>
         </div>
+      </div>
+      
+      {/* Mobile Search Panel */}
+      <div className="search-panel mobile-only" style={{ 
+        display: 'none', 
+        background: 'var(--bg-card)', 
+        borderRadius: 'var(--radius)', 
+        padding: '16px', 
+        margin: '0 24px 24px 24px' 
+      }}>
+        <input 
+          type="text" 
+          placeholder="Поиск элемента..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="search-input"
+          style={{ width: '100%' }}
+        />
       </div>
     </div>
   );

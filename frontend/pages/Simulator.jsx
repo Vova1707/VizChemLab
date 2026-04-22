@@ -697,7 +697,7 @@ const Simulator = () => {
       )}
 
       {user && (
-        <div className="glass-card sidebar">
+        <div className="glass-card sidebar desktop-history">
           <h2 className="section-header">
             <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
             История

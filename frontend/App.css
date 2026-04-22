@@ -1214,23 +1214,6 @@ a:hover {
   top: 24px;
 }
 
-/* Ensure desktop sidebars are visible by default */
-.desktop-history {
-  display: flex !important;
-}
-
-.desktop-isomers {
-  display: none !important;
-}
-
-/* Base sidebar styles should not interfere */
-.glass-card.sidebar.desktop-history {
-  display: flex !important;
-}
-
-.glass-card.sidebar.desktop-isomers {
-  display: none !important;
-}
 
 /* Charts container responsive layout */
 .charts-container {
@@ -1259,6 +1242,24 @@ a:hover {
   .builder-container .tool-panel {
     flex: 1 !important;
     min-width: 200px !important;
+  }
+  
+  .search-panel.desktop-only {
+    display: none !important;
+  }
+  
+  .search-panel.mobile-only {
+    display: block !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .search-panel.desktop-only {
+    display: block !important;
+  }
+  
+  .search-panel.mobile-only {
+    display: none !important;
   }
 }
 
