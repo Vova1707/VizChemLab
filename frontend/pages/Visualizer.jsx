@@ -545,7 +545,6 @@ const Visualizer = () => {
           )}
         </div>
       </div>
-    </div>
 
       {/* Mobile Isomers Bottom Panel */}
       <div className={`glass-card mobile-isomers-bottom ${mobileIsomersOpen ? 'open' : ''}`}>
@@ -585,6 +584,7 @@ const Visualizer = () => {
             </div>
           )}
         </div>
+      </div>
     </div>
   );
 };
