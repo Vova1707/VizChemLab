@@ -381,7 +381,7 @@ const Visualizer = () => {
         </p>
 
         <form onSubmit={handleSubmit}
-          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, gap: 12, maxWidth: '600px', margin: '0 auto 32px auto' }}>
+          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, maxWidth: '600px', margin: '0 auto 32px auto' }}>
           <input
             value={molecule}
             onChange={e => setMolecule(e.target.value)}

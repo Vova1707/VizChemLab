@@ -771,7 +771,7 @@ const Simulator = () => {
         </div>
       )}
 
-      <div className="main-content" style={{ width: '100%', maxWidth: '100%', padding: '24px' }}>
+      <div className="main-content" style={{ width: '100%', padding: '24px' }}>
           <div style={{ marginBottom: '24px', textAlign: 'center' }}>
             <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Симулятор реакций

@@ -692,7 +692,7 @@ const Builder = () => {
   return (
     <div className="builder-container">
       <div className="builder-layout" style={{ display: 'flex', gap: '24px', flex: 1, padding: '24px' }}>
-        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="tools-sidebar" style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '20px' }}>
               <div className="tool-header">
                 <h3 className="tool-title">

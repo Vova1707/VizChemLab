@@ -1249,7 +1249,7 @@ a:hover {
     flex-direction: column !important;
   }
   
-  .builder-container .builder-layout > div {
+  .builder-container .tools-sidebar {
     width: 100% !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
