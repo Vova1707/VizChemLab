@@ -689,28 +689,56 @@ const Builder = () => {
     );
   }
 
+  
   return (
     <div className="builder-container">
-      <div className="builder-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px' }}>
-        <div className="tools-topbar" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px', minWidth: '280px' }}>
-              <div className="tool-header" style={{ marginBottom: '12px' }}>
-                <h3 className="tool-title" style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
-                  Элемент
+      <div className="builder-layout" style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, padding: '12px' }}>
+        <div className="tools-topbar" style={{ 
+          display: 'flex', 
+          gap: '8px', 
+          flexWrap: 'nowrap', 
+          justifyContent: 'space-between',
+          alignItems: 'stretch',
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius)',
+          padding: '6px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch', flex: 1 }}>
+            <div className="elements-section" style={{ display: 'flex', flexDirection: 'column', flex: 2 }}>
+              <div className="section-header" style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '2px',
+                padding: '0 1px'
+              }}>
+                <h3 style={{ 
+                  fontSize: '0.7rem', 
+                  fontWeight: '600', 
+                  color: 'var(--text-main)',
+                  margin: 0 
+                }}>
+                  Элементы
                 </h3>
                 <span style={{ 
-                  fontSize: '0.7rem', 
-                  padding: '2px 6px', 
+                  fontSize: '0.55rem', 
+                  padding: '1px 3px', 
                   background: 'var(--primary)', 
                   color: '#fff', 
-                  borderRadius: '4px',
+                  borderRadius: '3px',
                   fontWeight: '600'
                 }}>
                   {selectedElement?.symbol || '...'}
                 </span>
               </div>
 
-              <div className="element-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+              <div className="element-grid" style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(36px, 1fr))', 
+                gap: '1px', 
+                padding: '2px'
+              }}>
                 {isLoadingConstants ? (
                   <div style={{ gridColumn: 'span 4', textAlign: 'center', padding: '20px', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Загрузка элементов...</div>
                 ) : periodicTable.length === 0 ? (
@@ -721,19 +749,29 @@ const Builder = () => {
                 ) : filteredElements.map(el => (
                   <button
                     key={el.symbol}
+                    className={`element-btn ${selectedElement?.symbol === el.symbol ? 'selected' : ''}`}
                     onClick={() => {
                       setSelectedElement(el);
                       setIsEraserMode(false);
-                      setSelectedAtomId(null);
                       setActiveTool('atom');
                     }}
-                    className="element-btn"
                     style={{
                       border: `2px solid ${selectedElement?.symbol === el.symbol ? 'var(--primary)' : 'transparent'}`,
                       background: el.color,
                       color: ['H', 'Li', 'Be', 'B', 'Al', 'K', 'Ca', 'Sc', 'Ag', 'Cd', 'In', 'Sn', 'Ba', 'La', 'Ce', 'Pt', 'Au', 'Hg'].includes(el.symbol) ? '#000' : '#fff',
                       boxShadow: selectedElement?.symbol === el.symbol ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none',
-                      transform: selectedElement?.symbol === el.symbol ? 'scale(1.05)' : 'scale(1)'
+                      transform: selectedElement?.symbol === el.symbol ? 'scale(1.05)' : 'scale(1)',
+                      borderRadius: '6px',
+                      padding: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      minWidth: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}
                     title={`${el.name} (Valence: ${el.valence})`}
                   >
@@ -743,49 +781,103 @@ const Builder = () => {
               </div>
             </div>
 
-            <div className="search-panel desktop-only" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px' }}>
-              <input 
-                type="text" 
-                placeholder="Поиск элемента..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px', minWidth: '200px' }}>
-              <div className="tool-header" style={{ marginBottom: '12px' }}>
-                <h3 className="tool-title" style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+            <div className="tools-section" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div className="section-header" style={{ 
+                marginBottom: '3px',
+                padding: '0 2px'
+              }}>
+                <h3 style={{ 
+                  fontSize: '0.7rem', 
+                  fontWeight: '600', 
+                  color: 'var(--text-main)',
+                  margin: 0 
+                }}>
                   Инструменты
                 </h3>
               </div>
               
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button 
                   onClick={() => { setActiveTool('atom'); setIsEraserMode(false); setSelectedAtomId(null); }}
                   className={`btn btn-sm tool-btn ${activeTool === 'atom' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
                     border: activeTool === 'atom' && !isEraserMode ? 'none' : '1px solid var(--border)',
-                    padding: '6px 8px',
-                    fontSize: '0.7rem'
+                    padding: '4px',
+                    fontSize: '0.6rem',
+                    borderRadius: '4px',
+                    minWidth: '32px',
+                    height: '32px'
                   }}
                   title="Атом"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
                 </button>
                 <button 
                   onClick={() => { setActiveTool('bond'); setIsEraserMode(false); setSelectedAtomId(null); }}
                   className={`btn btn-sm tool-btn ${activeTool === 'bond' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
                     border: activeTool === 'bond' && !isEraserMode ? 'none' : '1px solid var(--border)',
-                    padding: '6px 8px',
-                    fontSize: '0.7rem'
+                    padding: '4px',
+                    fontSize: '0.6rem',
+                    borderRadius: '4px',
+                    minWidth: '32px',
+                    height: '32px'
                   }}
                   title="Связь"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '2px', 
+                  marginLeft: '4px',
+                  padding: '4px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '6px'
+                }}>
+                  {isLoadingConstants ? (
+                    <div style={{ padding: '0 8px', color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Загрузка...</div>
+                  ) : bondTypes.map((type, idx) => (
+                    <button
+                      key={`${type.id}-${type.label}-${idx}`}
+                      onClick={() => {
+                        setSelectedBondType(type);
+                        setIsEraserMode(false);
+                        setActiveTool('bond');
+                      }}
+                      className="bond-btn"
+                      style={{ 
+                        background: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? 'var(--primary)' : 'transparent',
+                        color: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? '#fff' : 'var(--text-main)',
+                        padding: '4px 6px',
+                        fontSize: '0.65rem',
+                        minWidth: '28px',
+                        height: '28px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                      title={type.label}
+                    >
+                      <div style={{ height: '16px', display: 'flex', alignItems: 'center' }}>
+                        {type.style === 'wedge' ? (
+                          <svg width="20" height="8" viewBox="0 0 20 8">
+                            <polygon points="0,4 20,0 20,8" fill="currentColor" />
+                          </svg>
+                        ) : type.style === 'dash' ? (
+                          <svg width="20" height="8" viewBox="0 0 20 8">
+                            <line x1="0" y1="4" x2="20" y2="4" stroke="currentColor" strokeWidth="3" strokeDasharray="3,3" />
+                          </svg>
+                        ) : (
+                          <svg width="20" height="8" viewBox="0 0 20 8">
+                            <line x1="0" y1="4" x2="20" y2="4" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -850,46 +942,12 @@ const Builder = () => {
                 {isEraserMode ? 'Режим удаления' : 'Ластик'}
               </button>
             </div>
-
-            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <button 
-                className="btn" 
-                onClick={handleFinish} 
-                disabled={atoms.length === 0}
-                style={{ 
-                  background: 'linear-gradient(135deg, var(--primary), #818cf8)', 
-                  border: 'none',
-                  padding: '14px',
-                  borderRadius: '14px',
-                  fontWeight: '700',
-                  fontSize: '0.95rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
-                  transition: 'all 0.3s ease'
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                Визуализировать
-              </button>
-              <button 
-                className="btn btn-secondary" 
-                onClick={clearCanvas}
-                style={{
-                  padding: '12px',
-                  borderRadius: '14px',
-                  fontWeight: '600',
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                Очистить всё
-              </button>
-            </div>
           </div>
+        </div>
+
+        {/* Main Canvas Area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    </div>
 
           <div style={{ 
             flex: 1, 
@@ -1003,8 +1061,8 @@ const Builder = () => {
                 <svg 
                   ref={svgRef}
                   width="100%" 
-                  height="100%" 
-                  style={{ cursor: isEraserMode ? 'crosshair' : 'default', display: 'block' }} 
+                  height="600px" 
+                  style={{ cursor: isEraserMode ? 'crosshair' : 'default', display: 'block', minHeight: '600px' }} 
                   onClick={handleCanvasClick}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
@@ -1194,6 +1252,55 @@ const Builder = () => {
                     );
                   })}
                 </svg>
+              
+              {/* Кнопки внизу канваса */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '12px', 
+                padding: '16px',
+                background: 'var(--bg-card)',
+                borderRadius: '12px',
+                marginTop: '12px'
+              }}>
+                <button 
+                  className="btn" 
+                  onClick={handleFinish} 
+                  disabled={atoms.length === 0}
+                  style={{ 
+                    background: 'linear-gradient(135deg, var(--primary), #818cf8)', 
+                    border: 'none',
+                    padding: '12px 20px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
+                    transition: 'all 0.3s ease',
+                    flex: 1
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                  Визуализировать
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={clearCanvas}
+                  style={{
+                    padding: '12px 20px',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    transition: 'all 0.2s ease',
+                    flex: 1
+                  }}
+                >
+                  Очистить всё
+                </button>
+              </div>
               </div>
 
               <div style={{ 
@@ -1420,7 +1527,7 @@ const Builder = () => {
         </div>
         
         {/* Main Canvas Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Mobile Search Panel */}
           <div className="search-panel mobile-only" style={{ 
             display: 'none', 
