@@ -126,7 +126,6 @@ const Header = () => {
                 className={isActive('/visualizer')}
                 onClick={closeMobileMenu}
               >
-                <span className="nav-icon">🔬</span>
                 Визуализатор
               </Link>
               <Link 
@@ -134,7 +133,6 @@ const Header = () => {
                 className={isActive('/simulator')}
                 onClick={closeMobileMenu}
               >
-                <span className="nav-icon">⚗️</span>
                 Симулятор
               </Link>
               <Link 
@@ -142,7 +140,6 @@ const Header = () => {
                 className={isActive('/builder')}
                 onClick={closeMobileMenu}
               >
-                <span className="nav-icon">🧪</span>
                 Конструктор
               </Link>
               
@@ -152,9 +149,6 @@ const Header = () => {
                 onClick={toggleTheme}
                 className="mobile-theme-toggle"
               >
-                <span className="nav-icon">
-                  {theme === 'dark' ? '☀️' : '🌙'}
-                </span>
                 {theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
               </button>
               
@@ -167,22 +161,18 @@ const Header = () => {
                     className={isActive('/profile')}
                     onClick={closeMobileMenu}
                   >
-                    <span className="nav-icon">👤</span>
                     Профиль
                   </Link>
                   <button onClick={handleLogout} className="mobile-logout-btn">
-                    <span className="nav-icon">🚪</span>
                     Выйти
                   </button>
                 </>
               ) : (
                 <>
                   <Link to="/login" onClick={closeMobileMenu}>
-                    <span className="nav-icon">🔑</span>
                     Войти
                   </Link>
                   <Link to="/register" className="btn btn-sm" onClick={closeMobileMenu}>
-                    <span className="nav-icon">✨</span>
                     Регистрация
                   </Link>
                 </>

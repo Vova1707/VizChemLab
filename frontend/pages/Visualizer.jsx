@@ -545,23 +545,24 @@ const Visualizer = () => {
           )}
         </div>
       </div>
+    </div>
 
-      {/* Mobile Isomers Sidebar */}
-      <div className={`glass-card sidebar mobile-isomers ${mobileIsomersOpen ? 'open' : ''}`}>
-        <div className="mobile-sidebar-header">
+      {/* Mobile Isomers Bottom Panel */}
+      <div className={`glass-card mobile-isomers-bottom ${mobileIsomersOpen ? 'open' : ''}`}>
+        <div className="mobile-isomers-header">
           <h2 className="section-header">
             <span className="status-dot" style={{ background: '#10b981' }}></span>
             Изомеры ({isomers.length})
           </h2>
           <button 
-            className="mobile-close-sidebar"
+            className="mobile-close-isomers"
             onClick={() => setMobileIsomersOpen(false)}
           >
             ✕
           </button>
         </div>
 
-        <div className="scrollable-content custom-scrollbar">
+        <div className="mobile-isomers-content">
           {isomers.length === 0 ? (
             <div className="sidebar-empty-state">
               Список пуст
@@ -584,7 +585,6 @@ const Visualizer = () => {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 };

@@ -57,7 +57,6 @@ async def get_gigachat_token() -> str:
         'RqUID': '99c62694-10a5-4f6f-8d2d-5759431d8f22'  # Обязательный UUID
     }
     
-    # Правильный payload
     payload = 'scope=GIGACHAT_API_PERS'
     
     try:
@@ -359,11 +358,14 @@ async def _generate_reaction(reactants: str) -> str:
             cleaned = clean_equation(raw)
             return cleaned
     except httpx.HTTPStatusError as exc:
-        # Если токен протух, сбрасываем его
+        # Если токен протух, сбрасываем его и пробуем снова
         if exc.response.status_code == 401:
             global _gigachat_token, _gigachat_token_expiry
             _gigachat_token = None
             _gigachat_token_expiry = None
+            print("Token expired, getting new token and retrying...")
+            # Рекурсивный вызов для получения нового токена
+            return await get_gigachat_token()
         print(f"GigaChat API Error: {exc.response.text}")
         raise HTTPException(
             status_code=502,
