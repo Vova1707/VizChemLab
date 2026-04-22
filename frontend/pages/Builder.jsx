@@ -691,26 +691,26 @@ const Builder = () => {
 
   return (
     <div className="builder-container">
-      <div className="builder-layout" style={{ display: 'flex', gap: '24px', flex: 1, padding: '24px' }}>
-        <div className="tools-sidebar" style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '20px' }}>
-              <div className="tool-header">
-                <h3 className="tool-title">
+      <div className="builder-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px' }}>
+        <div className="tools-topbar" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px', minWidth: '280px' }}>
+              <div className="tool-header" style={{ marginBottom: '12px' }}>
+                <h3 className="tool-title" style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                   Элемент
                 </h3>
                 <span style={{ 
-                  fontSize: '0.75rem', 
-                  padding: '4px 8px', 
+                  fontSize: '0.7rem', 
+                  padding: '2px 6px', 
                   background: 'var(--primary)', 
                   color: '#fff', 
-                  borderRadius: '6px',
+                  borderRadius: '4px',
                   fontWeight: '600'
                 }}>
                   {selectedElement?.symbol || '...'}
                 </span>
               </div>
 
-              <div className="element-grid">
+              <div className="element-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
                 {isLoadingConstants ? (
                   <div style={{ gridColumn: 'span 4', textAlign: 'center', padding: '20px', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Загрузка элементов...</div>
                 ) : periodicTable.length === 0 ? (
@@ -754,37 +754,41 @@ const Builder = () => {
               />
             </div>
 
-            <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '20px' }}>
-              <div className="tool-header">
-                <h3 className="tool-title">
+            <div className="tool-panel" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '16px', minWidth: '200px' }}>
+              <div className="tool-header" style={{ marginBottom: '12px' }}>
+                <h3 className="tool-title" style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
                   Инструменты
                 </h3>
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 <button 
                   onClick={() => { setActiveTool('atom'); setIsEraserMode(false); setSelectedAtomId(null); }}
                   className={`btn btn-sm tool-btn ${activeTool === 'atom' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
-                    border: activeTool === 'atom' && !isEraserMode ? 'none' : '1px solid var(--border)'
+                    border: activeTool === 'atom' && !isEraserMode ? 'none' : '1px solid var(--border)',
+                    padding: '6px 8px',
+                    fontSize: '0.7rem'
                   }}
+                  title="Атом"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
-                  <span style={{ fontSize: '0.75rem' }}>Атом</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
                 </button>
                 <button 
                   onClick={() => { setActiveTool('bond'); setIsEraserMode(false); setSelectedAtomId(null); }}
                   className={`btn btn-sm tool-btn ${activeTool === 'bond' && !isEraserMode ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ 
-                    border: activeTool === 'bond' && !isEraserMode ? 'none' : '1px solid var(--border)'
+                    border: activeTool === 'bond' && !isEraserMode ? 'none' : '1px solid var(--border)',
+                    padding: '6px 8px',
+                    fontSize: '0.7rem'
                   }}
+                  title="Связь"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  <span style={{ fontSize: '0.75rem' }}>Связь</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '12px' }}>
                 {isLoadingConstants ? (
                   <div style={{ gridColumn: 'span 2', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Загрузка...</div>
                 ) : bondTypes.map((type, idx) => (
@@ -799,7 +803,11 @@ const Builder = () => {
                     style={{ 
                       background: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? 'var(--primary)' : 'var(--bg-secondary)',
                       color: selectedBondType?.label === type.label && !isEraserMode && activeTool === 'bond' ? '#fff' : 'var(--text-main)',
+                      padding: '4px 8px',
+                      fontSize: '0.7rem',
+                      minWidth: '40px'
                     }}
+                    title={type.label}
                   >
                     <div style={{ height: '20px', display: 'flex', alignItems: 'center' }}>
                       {type.style === 'wedge' ? (
@@ -1410,24 +1418,29 @@ const Builder = () => {
               </div>
             </div>
         </div>
-      </div>
-      
-      {/* Mobile Search Panel */}
-      <div className="search-panel mobile-only" style={{ 
-        display: 'none', 
-        background: 'var(--bg-card)', 
-        borderRadius: 'var(--radius)', 
-        padding: '16px', 
-        margin: '0 24px 24px 24px' 
-      }}>
-        <input 
-          type="text" 
-          placeholder="Поиск элемента..." 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="search-input"
-          style={{ width: '100%' }}
-        />
+        
+        {/* Main Canvas Area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
+          {/* Mobile Search Panel */}
+          <div className="search-panel mobile-only" style={{ 
+            display: 'none', 
+            background: 'var(--bg-card)', 
+            borderRadius: 'var(--radius)', 
+            padding: '16px', 
+            marginBottom: '16px' 
+          }}>
+            <input 
+              type="text" 
+              placeholder="Поиск элемента..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+              style={{ width: '100%' }}
+            />
+          </div>
+          
+          {/* Canvas content goes here */}
+        </div>
       </div>
     </div>
   );

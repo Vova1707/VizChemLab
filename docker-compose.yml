@@ -26,18 +26,19 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-vizchemlab}
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY:-vizchemlab-production-secret-key-2024}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8000
-      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID}
-      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
       PYTHONPATH: .
     ports:
       - "0.0.0.0:8000:8000"
     command: >
       sh -c "python manage_db.py seed && 
+             python create_user.py && 
              python main.py"
 
   frontend:
