@@ -632,6 +632,10 @@ a:hover {
     display: flex;
   }
   
+  .mobile-isomers-bottom {
+    display: block;
+  }
+  
   .mobile-sidebar-header {
     display: flex;
   }
@@ -696,7 +700,7 @@ a:hover {
   }
   
   .mobile-history,
-  .mobile-isomers {
+  .mobile-isomers-bottom {
     display: none !important;
   }
   
@@ -1202,14 +1206,51 @@ a:hover {
 }
 
 /* Ensure desktop sidebars are visible by default */
-.desktop-history,
-.desktop-isomers {
+.desktop-history {
   display: flex !important;
 }
 
+.desktop-isomers {
+  display: none !important;
+}
+
 /* Base sidebar styles should not interfere */
-.glass-card.sidebar.desktop-isomers {
+.glass-card.sidebar.desktop-history {
   display: flex !important;
+}
+
+.glass-card.sidebar.desktop-isomers {
+  display: none !important;
+}
+
+/* Charts container responsive layout */
+.charts-container {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 769px) {
+  .charts-container {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Builder mobile responsive layout */
+@media (max-width: 768px) {
+  .builder-container .builder-layout {
+    flex-direction: column !important;
+  }
+  
+  .builder-container .builder-layout > div {
+    width: 100% !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  
+  .builder-container .tool-panel {
+    flex: 1 !important;
+    min-width: 200px !important;
+  }
 }
 
 .main-content {

@@ -70,7 +70,7 @@ const SimulationCharts = ({ equation, fps = 60 }) => {
   }, [equation]);
 
   return (
-    <div className="charts-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '20px' }}>
+    <div className="charts-container" style={{ display: 'grid', gap: '20px', padding: '20px' }}>
       {/* Concentration Plot */}
       <div className="glass-card" style={{ padding: '20px', borderRadius: '16px' }}>
         <h3 style={{ marginBottom: '20px', textAlign: 'center', fontSize: '1.2rem' }}>Кинетика реакции</h3>
