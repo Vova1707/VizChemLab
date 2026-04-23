@@ -1251,6 +1251,25 @@ a:hover {
   .search-panel.mobile-only {
     display: block !important;
   }
+  
+  /* Visualizer mobile form styles */
+  .visualizer-form {
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 0 16px !important;
+  }
+  
+  .visualizer-form .form-input {
+    width: 100% !important;
+    max-width: none !important;
+    minWidth: 150px !important;
+  }
+  
+  .visualizer-form .btn {
+    width: 100% !important;
+    max-width: none !important;
+    minWidth: auto !important;
+  }
 }
 
 @media (min-width: 769px) {

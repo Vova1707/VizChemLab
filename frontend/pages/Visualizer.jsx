@@ -381,14 +381,15 @@ const Visualizer = () => {
         </p>
 
         <form onSubmit={handleSubmit}
-          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, maxWidth: '600px', margin: '0 auto 32px auto' }}>
+          className="visualizer-form"
+          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, maxWidth: '600px', margin: '0 auto 32px auto', flexWrap: 'wrap' }}>
           <input
             value={molecule}
             onChange={e => setMolecule(e.target.value)}
             required
             className="form-input"
-            style={{ flex: 1, minWidth: '250px' }}
-            placeholder="Например: caffeine или C8H10N4O2"
+            style={{ flex: 1, minWidth: '200px', maxWidth: '300px' }}
+            placeholder="Например: caffeine"
             autoFocus
           />
           <button
@@ -396,11 +397,13 @@ const Visualizer = () => {
             className="btn"
             style={{
               height: '50px',
-              padding: '0 32px',
+              padding: '0 24px',
               fontSize: 16,
               margin: 0,
               width: 'auto',
-              borderRadius: '8px'
+              minWidth: '120px',
+              borderRadius: '8px',
+              flexShrink: 0
             }}
             disabled={loading}
           >
