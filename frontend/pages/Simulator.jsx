@@ -424,7 +424,11 @@ const Simulator = () => {
               return;
           }
           if (!viewerRef.current) return;
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' });
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+            backgroundColor: '#000000',
+            antialias: true,
+            backgroundOpacity: 1.0
+          });
       }
 
       let currentFrame;
@@ -453,11 +457,20 @@ const Simulator = () => {
       // Инициализируем viewer только если его еще нет
       if (!v3dRef.current) {
         try {
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' }, null, true);
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+            backgroundColor: '#000000',
+            antialias: true,
+            backgroundOpacity: 1.0
+          }, null, true);
         } catch (err) {
           console.error('createViewer (noWebGL) error:', err);
           try {
-            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000', viewerType: 'canvas' }, null, true);
+            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+              backgroundColor: '#000000', 
+              viewerType: 'canvas',
+              antialias: true,
+              backgroundOpacity: 1.0
+            }, null, true);
           } catch (err2) {
             console.error('createViewer (viewerType canvas) error:', err2);
           }
@@ -469,6 +482,18 @@ const Simulator = () => {
         console.error('Не удалось создать или получить viewer');
         return;
       }
+
+      // Принудительно устанавливаем размеры canvas после создания viewer
+      setTimeout(() => {
+        const canvas = viewerRef.current?.querySelector('canvas');
+        if (canvas) {
+          canvas.style.width = '100%';
+          canvas.style.height = '100%';
+          canvas.style.maxWidth = '100%';
+          canvas.style.maxHeight = '100%';
+          canvas.style.overflow = 'hidden';
+        }
+      }, 10);
 
       // Обновляем фон при каждой отрисовке кадра на случай смены темы
       viewer.setBackgroundColor(bgColor);
@@ -604,9 +629,13 @@ const Simulator = () => {
             const cy = (minY + maxY) / 2;
             const cz = (minZ + maxZ) / 2;
             viewer.center({x: cx, y: cy, z: cz});
+            
+            // Add slight zoom out for better visibility
+            const zoomFactor = 1.2;
+            viewer.zoom(zoomFactor);
+        } else {
+            viewer.zoomTo();
         }
-        
-        viewer.zoomTo();
         isNewSimRef.current = false;
       } else {
         const savedView = viewStatesRef.current[viewMode];
@@ -771,7 +800,7 @@ const Simulator = () => {
         </div>
       )}
 
-      <div className="main-content" style={{ width: '100%', padding: '24px' }}>
+      <div style={{ width: '100%', padding: '24px' }}>
           <div style={{ marginBottom: '24px', textAlign: 'center' }}>
             <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '8px', background: 'linear-gradient(135deg, var(--primary-color), #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Симулятор реакций
@@ -941,9 +970,10 @@ const Simulator = () => {
                   </div>
 
                   <div style={{
-                    width: '100%',
-                    height: '60vh',
-                    minHeight: '400px',
+                    width: '80%',
+                    height: '70vh',
+                    minHeight: '600px',
+                    maxHeight: '800px',
                     background: isDark ? '#0f172a' : '#f8faff',
                     borderRadius: 10,
                     border: '1px solid var(--border)',
@@ -952,17 +982,42 @@ const Simulator = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    margin: '0 auto'
                   }}>
                     {(!frames || frames.length === 0) ? (
-                      <div style={{ textAlign: 'center', padding: 20 }}>
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: 20,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
                         <div style={{ fontSize: 48, marginBottom: 16 }}>⚛️</div>
                         <h3 style={{ color: '#e2e8f0', marginBottom: 8 }}>{modelError || 'Нет данных для визуализации'}</h3>
                         <p style={{ color: '#94a3b8' }}>Попробуйте изменить реагенты</p>
                       </div>
                     ) : (
-                      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                        <div ref={viewerRef} style={{ width: '100%', height: '100%' }} />
+                      <div style={{ 
+                        position: 'relative', 
+                        width: '100%', 
+                        height: '100%',
+                        overflow: 'hidden',
+                        maxWidth: '100%',
+                        maxHeight: '100%'
+                      }}>
+                        <div ref={viewerRef} className="simulator-canvas" style={{ 
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          overflow: 'hidden'
+                        }} />
                         <div ref={debugRef} style={{
                           position: 'absolute',
                           top: 10,

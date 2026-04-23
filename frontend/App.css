@@ -437,17 +437,21 @@ a:hover {
   
   /* Visualizer Mobile */
   .canvas-wrapper {
-    min-height: 250px;
+    height: 500px;
+    min-height: 500px;
     border-radius: 8px;
   }
   
-  /* Mobile sidebars override desktop styles */
+  /* Hide sidebars - only use bottom panels */
   .mobile-history,
-  .mobile-isomers {
+  .mobile-isomers,
+  .desktop-isomers,
+  .desktop-history {
     display: none !important;
   }
 
-  .mobile-isomers-bottom {
+  .mobile-isomers-bottom,
+  .isomers-bottom {
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
@@ -466,7 +470,8 @@ a:hover {
     flex-direction: column !important;
   }
 
-  .mobile-isomers-content {
+  .mobile-isomers-content,
+  .isomers-bottom .mobile-isomers-content {
     flex: 1 !important;
     overflow-y: auto !important;
     max-height: calc(60vh - 60px) !important;
@@ -474,7 +479,8 @@ a:hover {
   }
   
   .mobile-history.open,
-  .mobile-isomers-bottom.open {
+  .mobile-isomers-bottom.open,
+  .isomers-bottom.open {
     transform: translateY(0) !important;
   }
   
@@ -657,6 +663,18 @@ a:hover {
   .sidebar:not(.mobile-history):not(.mobile-isomers):not(.desktop-history):not(.desktop-isomers) {
     display: none;
   }
+
+/* Force hide all desktop sidebars */
+.glass-card.sidebar.desktop-history,
+.glass-card.sidebar.desktop-isomers {
+  display: none !important;
+}
+
+/* Global rule to hide all desktop sidebars */
+.glass-card.sidebar.desktop-history,
+.glass-card.sidebar.desktop-isomers {
+  display: none !important;
+}
 }
 
 /* Isomers Grid */
@@ -1262,13 +1280,13 @@ a:hover {
   .visualizer-form .form-input {
     width: 100% !important;
     max-width: none !important;
-    minWidth: 150px !important;
+    min-width: 150px !important;
   }
   
   .visualizer-form .btn {
     width: 100% !important;
     max-width: none !important;
-    minWidth: auto !important;
+    min-width: auto !important;
   }
 }
 
@@ -1325,12 +1343,22 @@ a:hover {
 
 .canvas-wrapper {
   width: 100%;
-  flex: 1;
+  height: 1000px;
+  min-height: 1000px;
   background: var(--bg-body);
   border-radius: 16px;
   position: relative;
   overflow: hidden;
   border: 1px solid var(--border);
+}
+
+/* Override canvas-wrapper styles for simulator */
+.simulator-canvas {
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  position: relative !important;
 }
 
 /* Scrollbar */

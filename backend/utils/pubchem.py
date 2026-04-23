@@ -80,8 +80,16 @@ async def fetch_pubchem_sdf_by_cid(cid: int, record_type: str = "3d") -> str | N
 
 async def fetch_cids_by_formula(formula: str) -> list[int]:
     """Поиск CID по химической формуле. Пробуем fastformula, затем обычный поиск."""
+    # Определяем лимит в зависимости от формулы
+    if formula == "C3H6":
+        max_records = 10  # Для C3H6 должно быть гораздо меньше изомеров
+    elif formula.startswith("C") and len(formula) <= 6:
+        max_records = 15  # Для маленьких молекул
+    else:
+        max_records = 25  # Для больших молекул
+    
     #Пробуем fastformula
-    fast_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{quote(formula)}/cids/JSON?MaxRecords=40"
+    fast_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{quote(formula)}/cids/JSON?MaxRecords={max_records}"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(fast_url)
@@ -89,18 +97,23 @@ async def fetch_cids_by_formula(formula: str) -> list[int]:
                 data = r.json()
                 cids = data.get("IdentifierList", {}).get("CID", [])
                 if cids:
-                    return cids
+                    # Убираем дубликаты и сортируем
+                    unique_cids = sorted(list(set(cids)))
+                    return unique_cids
     except Exception as e:
         pass
 
     #Если не нашли, пробуем обычный поиск по формуле
-    formula_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/formula/{quote(formula)}/cids/JSON?MaxRecords=40"
+    formula_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/formula/{quote(formula)}/cids/JSON?MaxRecords={max_records}"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(formula_url)
             if r.status_code == 200:
                 data = r.json()
-                return data.get("IdentifierList", {}).get("CID", [])
+                cids = data.get("IdentifierList", {}).get("CID", [])
+                # Убираем дубликаты и сортируем
+                unique_cids = sorted(list(set(cids)))
+                return unique_cids
     except Exception as e:
         pass
 

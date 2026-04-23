@@ -324,43 +324,8 @@ const Visualizer = () => {
         </div>
       )}
 
-      {user && (
-        <div className="glass-card sidebar">
-          <h2 className="section-header">
-            <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
-            История
-          </h2>
-          <div className="scrollable-content custom-scrollbar">
-            {history.length === 0 ? (
-              <div className="sidebar-empty-state">
-                История пуста
-              </div>
-            ) : (
-              history.map((item, idx) => (
-                <div key={idx} className="history-item">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(item.query);
-                    }}
-                    className="btn-delete-history"
-                  >
-                    ×
-                  </button>
-                  <button
-                    onClick={() => performSearch(item.query)}
-                    className="btn-isomer"
-                  >
-                    {item.query}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="glass-card main-content" style={{ maxWidth: '100%', width: '100%' }}>
+      
+      <div style={{ maxWidth: '100%', width: '100%' }}>
         <h1 style={{
           fontSize: 32,
           fontWeight: 800,
@@ -417,176 +382,51 @@ const Visualizer = () => {
           ref={viewerRef}
           className="canvas-wrapper"
         />
-
-        {/* Mobile Sidebar Controls */}
-        <div className="mobile-sidebar-controls">
-          {user && (
-            <button 
-              className="mobile-sidebar-btn"
-              onClick={() => setMobileHistoryOpen(!mobileHistoryOpen)}
-            >
-              📚 История {history.length > 0 && `(${history.length})`}
-            </button>
-          )}
-          {isomers.length > 0 && (
-            <button 
-              className="mobile-sidebar-btn"
-              onClick={() => setMobileIsomersOpen(!mobileIsomersOpen)}
-            >
-              🔬 Изомеры ({isomers.length})
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile History Sidebar */}
-      {user && (
-        <div className={`glass-card sidebar mobile-history ${mobileHistoryOpen ? 'open' : ''}`}>
-          <div className="mobile-sidebar-header">
-            <h2 className="section-header">
-              <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
-              История
-            </h2>
-            <button 
-              className="mobile-close-sidebar"
-              onClick={() => setMobileHistoryOpen(false)}
-            >
-              ✕
-            </button>
-          </div>
-          <div className="scrollable-content custom-scrollbar">
-            {history.length === 0 ? (
-              <div className="sidebar-empty-state">
-                История пуста
-              </div>
-            ) : (
-              history.map((item, idx) => (
-                <div key={idx} className="history-item">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(item.query);
-                    }}
-                    className="btn-delete-history"
-                  >
-                    ×
-                  </button>
-                  <button
-                    onClick={() => {
-                      performSearch(item.query);
-                      setMobileHistoryOpen(false);
-                    }}
-                    className="btn-isomer"
-                  >
-                    {item.query}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Desktop History Sidebar */}
-      {user && (
-        <div className="glass-card sidebar desktop-history">
-          <h2 className="section-header">
-            <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
-            История
-          </h2>
-          <div className="scrollable-content custom-scrollbar">
-            {history.length === 0 ? (
-              <div className="sidebar-empty-state">
-                История пуста
-              </div>
-            ) : (
-              history.map((item, idx) => (
-                <div key={idx} className="history-item">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(item.query);
-                    }}
-                    className="btn-delete-history"
-                  >
-                    ×
-                  </button>
-                  <button
-                    onClick={() => performSearch(item.query)}
-                    className="btn-isomer"
-                  >
-                    {item.query}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Desktop Isomers Sidebar */}
-      <div className="glass-card sidebar desktop-isomers">
-        <h2 className="section-header">
-          <span className="status-dot" style={{ background: '#10b981' }}></span>
-          Изомеры
-        </h2>
-        <div className="scrollable-content custom-scrollbar">
-          {isomers.length === 0 ? (
-            <div className="sidebar-empty-state">
-              Список пуст
-            </div>
-          ) : (
-            isomers.map((isomer) => (
-              <button
-                key={isomer.cid}
-                onClick={() => handleIsomerClick(isomer.cid)}
-                className="btn-isomer"
-              >
-                {isomer.name}
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Mobile Isomers Bottom Panel */}
-      <div className={`glass-card mobile-isomers-bottom ${mobileIsomersOpen ? 'open' : ''}`}>
-        <div className="mobile-isomers-header">
-          <h2 className="section-header">
-            <span className="status-dot" style={{ background: '#10b981' }}></span>
-            Изомеры ({isomers.length})
-          </h2>
-          <button 
-            className="mobile-close-isomers"
-            onClick={() => setMobileIsomersOpen(false)}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="mobile-isomers-content">
-          {isomers.length === 0 ? (
-            <div className="sidebar-empty-state">
-              Список пуст
-            </div>
-          ) : (
+        
+        {/* Изомеры под канвасом */}
+        {isomers.length > 0 && (
+          <div className="glass-card" style={{ margin: '20px 0', padding: '16px' }}>
+            <h3 style={{ 
+              marginBottom: '12px', 
+              color: 'var(--text-main)',
+              fontSize: '16px',
+              fontWeight: '600'
+            }}>
+              Изомеры ({isomers.length})
+            </h3>
             <div className="isomers-grid">
               {isomers.map((isomer) => (
                 <button
                   key={isomer.cid}
-                  onClick={() => {
-                    handleIsomerClick(isomer.cid);
-                    setMobileIsomersOpen(false);
-                  }}
+                  onClick={() => handleIsomerClick(isomer.cid)}
                   className="isomer-card"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    margin: '4px 0',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--text-main)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    textAlign: 'left'
+                  }}
                 >
-                  <div className="isomer-name">{isomer.name}</div>
-                  <div className="isomer-cid">CID: {isomer.cid}</div>
+                  <div className="isomer-name" style={{ 
+                    fontWeight: '600',
+                    color: 'var(--text-main)'
+                  }}>{isomer.name}</div>
+                  <div className="isomer-cid" style={{ 
+                    fontSize: '12px', 
+                    opacity: '0.7',
+                    color: 'var(--text-secondary)'
+                  }}>CID: {isomer.cid}</div>
                 </button>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
