@@ -362,7 +362,7 @@ const Simulator = () => {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail || data?.error || 'Не удалось выполнить симуляцию. Проверьте, что Ollama запущена.');
+        throw new Error(data?.detail || data?.error || 'Не удалось выполнить симуляцию. Сервер не отвечает.');
       }
 
       if (data.raw_equation === 'NO_REACTION') {
