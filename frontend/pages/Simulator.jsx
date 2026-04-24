@@ -182,6 +182,8 @@ const Simulator = () => {
   const viewStatesRef = useRef({ reactants: null, products: null, morph: null });
   const prevViewModeRef = useRef('morph');
   const debugRef = useRef(null);
+  const webglContextLostRef = useRef(false);
+  const retryCountRef = useRef(0);
   const [activeTab, setActiveTab] = useState('3d');
   const [libError, setLibError] = useState('');
 
@@ -422,12 +424,41 @@ const Simulator = () => {
     if (viewerRef.current) {
       viewerRef.current.innerHTML = '';
     }
+    webglContextLostRef.current = false;
+  };
+
+  const handleWebGLContextLoss = () => {
+    console.warn('WebGL context lost');
+    webglContextLostRef.current = true;
+    cleanupViewer();
+    retryCountRef.current = 0;
+  };
+
+  const handleWebGLContextRestored = () => {
+    console.log('WebGL context restored');
+    webglContextLostRef.current = false;
+    retryCountRef.current = 0;
   };
 
   useEffect(() => {
     // Simple cleanup when leaving 3d tab
     if (activeTab !== '3d') {
       v3dRef.current = null;
+      webglContextLostRef.current = false;
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Setup WebGL context event listeners
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      canvas.addEventListener('webglcontextlost', handleWebGLContextLoss);
+      canvas.addEventListener('webglcontextrestored', handleWebGLContextRestored);
+      
+      return () => {
+        canvas.removeEventListener('webglcontextlost', handleWebGLContextLoss);
+        canvas.removeEventListener('webglcontextrestored', handleWebGLContextRestored);
+      };
     }
   }, [activeTab]);
 
@@ -439,6 +470,12 @@ const Simulator = () => {
       const list = frames.length ? frames : lastFramesRef.current;
       if (!list.length || !viewerRef.current) return;
 
+      // Check for WebGL context loss
+      if (webglContextLostRef.current) {
+        console.log('WebGL context lost, skipping render');
+        return;
+      }
+
       // Simple viewer initialization like the working version
       if (!v3dRef.current && viewerRef.current.innerHTML === '') {
           try {
@@ -448,7 +485,19 @@ const Simulator = () => {
               return;
           }
           if (!viewerRef.current) return;
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' });
+          
+          // Create viewer with error handling
+          try {
+            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+              backgroundColor: '#000000',
+              antialias: false, // Disable antialiasing to reduce WebGL issues
+              backgroundOpacity: 1.0
+            });
+          } catch (err) {
+            console.error('Viewer creation failed:', err);
+            setLibError('Не удалось создать 3D визуализатор. Попробуйте перезагрузить страницу.');
+            return;
+          }
       }
 
       let currentFrame;
@@ -477,13 +526,24 @@ const Simulator = () => {
       // Simple viewer initialization like the working version
       if (!v3dRef.current) {
         try {
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' }, null, true);
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+            backgroundColor: '#000000',
+            antialias: false,
+            backgroundOpacity: 1.0
+          }, null, true);
         } catch (err) {
           console.error('createViewer (noWebGL) error:', err);
           try {
-            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000', viewerType: 'canvas' }, null, true);
+            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
+              backgroundColor: '#000000', 
+              viewerType: 'canvas',
+              antialias: false,
+              backgroundOpacity: 1.0
+            }, null, true);
           } catch (err2) {
             console.error('createViewer (viewerType canvas) error:', err2);
+            setLibError('WebGL не поддерживается. 3D визуализация недоступна.');
+            return;
           }
         }
       }
@@ -642,9 +702,22 @@ const Simulator = () => {
       // Обновляем ссылку на текущий режим для следующего цикла
       prevViewModeRef.current = viewMode;
 
-      // Простой рендеринг без задержек
-      viewer.render();
-      viewer.resize();
+      // Простой рендеринг с обработкой ошибок
+      try {
+        viewer.render();
+        viewer.resize();
+      } catch (err) {
+        console.error('Render error:', err);
+        if (retryCountRef.current < 3) {
+          retryCountRef.current++;
+          console.log(`Retrying render (${retryCountRef.current}/3)`);
+          setTimeout(() => {
+            cleanupViewer();
+          }, 1000);
+        } else {
+          setLibError('Ошибка рендеринга 3D сцены. Попробуйте перезагрузить страницу.');
+        }
+      }
     };
 
     renderFrame();
