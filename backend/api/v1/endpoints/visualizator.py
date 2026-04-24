@@ -139,11 +139,23 @@ async def visualize_compound(
         for rt in ["3d", "2d"]:
             sdf = await pubchem.fetch_pubchem_sdf_by_name(cand, record_type=rt)
             if sdf:
+                # Получаем дополнительную информацию о соединении
+                cid = await pubchem.fetch_cid_by_name(cand)
+                info = None
+                if cid:
+                    info = await pubchem.get_compound_info(cid)
+                
                 return {
                     "compound": compound,
                     "source": "PubChem",
                     "format": "sdf",
                     "data": sdf,
+                    "info": {
+                        "cid": cid,
+                        "molecular_weight": info.get("weight") if info else None,
+                        "molecular_formula": info.get("formula") if info else None,
+                        "iupac_name": info.get("name") if info else None
+                    }
                 }
 
     query = trans or compound
@@ -161,12 +173,21 @@ async def visualize_compound(
                 if not first_sdf:
                     first_sdf = await pubchem.fetch_pubchem_sdf_by_cid(first_cid, record_type="2d")
                 
+                # Получаем информацию о первом изомере
+                first_info = await pubchem.get_compound_info(first_cid)
+                
                 return JSONResponse(content={
                     "isomers": isomers,
                     "data": first_sdf,
                     "compound": compound,
                     "source": "PubChem",
                     "format": "sdf",
+                    "info": {
+                        "cid": first_cid,
+                        "molecular_weight": first_info.get("weight") if first_info else None,
+                        "molecular_formula": first_info.get("formula") if first_info else None,
+                        "iupac_name": first_info.get("name") if first_info else None
+                    },
                     "cid": first_cid
                 })
         elif len(cids) == 1:
@@ -176,12 +197,21 @@ async def visualize_compound(
                 sdf = await pubchem.fetch_pubchem_sdf_by_cid(cid, record_type="2d")
             
             if sdf:
+                # Получаем информацию о соединении
+                info = await pubchem.get_compound_info(cid)
+                
                 return {
                     "compound": compound,
                     "source": "PubChem",
                     "format": "sdf",
                     "data": sdf,
-                    "cid": cid
+                    "cid": cid,
+                    "info": {
+                        "cid": cid,
+                        "molecular_weight": info.get("weight") if info else None,
+                        "molecular_formula": info.get("formula") if info else None,
+                        "iupac_name": info.get("name") if info else None
+                    }
                 }
 
     # 3. Fallback

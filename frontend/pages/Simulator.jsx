@@ -174,6 +174,8 @@ const Simulator = () => {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
+  const [showDesktopHistory, setShowDesktopHistory] = useState(true);
   const viewerRef = useRef();
   const v3dRef = useRef(null);
   const timerRef = useRef(null);
@@ -303,13 +305,23 @@ const Simulator = () => {
 
   const fetchHistory = async () => {
     try {
-      const resp = await fetch('/api/simulate/history');
-      if (resp.ok) {
-        const data = await resp.json();
-        setHistory(data);
+      // Загружаем историю только для авторизованных пользователей
+      if (user) {
+        const resp = await fetch('/api/simulate/history');
+        if (resp.ok) {
+          const data = await resp.json();
+          setHistory(data);
+        } else {
+          console.error('Failed to fetch simulator history');
+          setHistory([]);
+        }
+      } else {
+        // Для неавторизованных пользователей история не загружается
+        setHistory([]);
       }
     } catch (e) {
       console.error('Failed to fetch simulator history:', e);
+      setHistory([]);
     }
   };
 
@@ -403,8 +415,28 @@ const Simulator = () => {
       lastFramesRef.current = nextFrames;
       if (nextFrames.length > 1) setPlaying(true);
       
-      // Обновляем историю после успешной симуляции
-      fetchHistory();
+      // Сохраняем историю только для авторизованных пользователей
+      if (user) {
+        // Добавляем новый запрос в историю (если его еще нет)
+        const existingIndex = history.findIndex(item => item.query === trimmedQuery);
+        if (existingIndex !== -1) {
+          // Перемещаем существующий элемент в начало
+          const newHistory = [...history];
+          newHistory.splice(existingIndex, 1);
+          newHistory.unshift({
+            query: trimmedQuery,
+            timestamp: new Date().toISOString()
+          });
+          setHistory(newHistory);
+        } else {
+          // Добавляем новый элемент в начало
+          const newHistory = [{
+            query: trimmedQuery,
+            timestamp: new Date().toISOString()
+          }, ...history];
+          setHistory(newHistory);
+        }
+      }
     } catch (err) {
       setError(err.message || 'Неизвестная ошибка');
     } finally {
@@ -792,73 +824,143 @@ const Simulator = () => {
         </div>
       )}
 
-      {user && (
-        <div className="glass-card sidebar desktop-history">
-          <h2 className="section-header">
-            <span className="status-dot" style={{ background: 'var(--primary)' }}></span>
+      {/* Мобильная кнопка истории */}
+      {history.length > 0 && (
+        <div className="mobile-only" style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          left: '20px', 
+          zIndex: 1000 
+        }}>
+          <button
+            onClick={() => setMobileHistoryOpen(!mobileHistoryOpen)}
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              fontSize: '14px',
+              color: 'var(--text-main)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+              <path d="M12 7v5l4 2"/>
+            </svg>
             История
-          </h2>
-          <div className="scrollable-content custom-scrollbar">
-            {history.length === 0 ? (
-              <div style={{ 
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+          </button>
+        </div>
+      )}
+
+      {/* Мобильное меню истории */}
+      {mobileHistoryOpen && (
+        <div className="mobile-only" style={{
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 999,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{
+            background: 'var(--bg-body)',
+            padding: '20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <h3 style={{ margin: 0, color: 'var(--text-main)' }}>История симуляций</h3>
+            <button
+              onClick={() => setMobileHistoryOpen(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer'
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ 
+            flex: 1, 
+            overflowY: 'auto', 
+            padding: '16px',
+            background: 'var(--bg-body)'
+          }}>
+                          <div style={{ 
+                textAlign: 'center',
                 color: 'var(--text-secondary)', 
                 fontSize: 14,
                 fontStyle: 'italic',
-                opacity: 0.6
+                opacity: 0.6,
+                marginTop: '50px'
               }}>
                 История пуста
               </div>
-            ) : (
-              history.map((item, idx) => (
-                <div key={idx} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          history.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(item.query);
+                    onClick={() => {
+                      setEquation(item.query);
+                      setReactants(item.query);
+                      setMobileHistoryOpen(false);
+                      // Автоматически запускаем симуляцию
+                      setTimeout(() => {
+                        const form = document.querySelector('#simulator-form');
+                        if (form) form.dispatchEvent(new Event('submit', { cancelable: true }));
+                      }, 100);
                     }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-main)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontSize: '14px'
+                    }}
+                  >
+                    {item.query}
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(item.query)}
                     style={{
                       background: 'none',
                       border: 'none',
                       color: 'var(--error)',
                       cursor: 'pointer',
-                      fontSize: '18px',
-                      padding: '0 4px',
-                      opacity: 0.6,
-                      transition: 'opacity 0.2s'
-                    }}
-                    onMouseOver={(e) => e.target.style.opacity = 1}
-                    onMouseOut={(e) => e.target.style.opacity = 0.6}
-                  >
-                    ×
-                  </button>
-                  <button
-                    onClick={() => {
-                      setReactants(item.query);
-                      handleSimulate(null, item.query);
-                    }}
-                    className="btn-isomer"
-                    style={{
-                      flex: 1,
-                      textAlign: 'left',
-                      padding: '10px 12px',
-                      fontSize: '14px',
-                      backgroundColor: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      color: 'var(--text-main)',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      transition: 'all 0.2s',
-                      fontWeight: '600'
+                      padding: '4px'
                     }}
                   >
-                    {item.query}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
                   </button>
                 </div>
               ))
@@ -895,6 +997,79 @@ const Simulator = () => {
               {loading ? 'Считаем...' : 'Симулировать'}
             </button>
           </form>
+
+          {/* История поиска внизу между формой и результатами */}
+          {user && history.length > 0 && (
+            <div style={{ 
+              marginTop: '24px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '16px'
+            }}>
+              <h3 style={{ 
+                margin: '0 0 12px 0', 
+                color: 'var(--text-main)',
+                fontSize: '14px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                Последние запросы
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {history.slice(0, 5).map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setReactants(item.query);
+                      setEquation(item.query);
+                      // Только меняем текст, не запускаем симуляцию
+                    }}
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '16px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--primary)';
+                      e.currentTarget.style.color = 'white';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'var(--bg-secondary)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                  >
+                    {item.query}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(item.query);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        padding: '0',
+                        marginLeft: '4px'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {equation && (
             <div style={{ marginTop: 24, fontSize: 32, textAlign: 'center', fontWeight: 700, letterSpacing: 0.5, color: 'var(--text-main)' }}>
@@ -987,7 +1162,7 @@ const Simulator = () => {
                           </div>
                         ))}
                       </div>
-                                          </div>
+                    </div>
                   )}
                 </div>
               )}

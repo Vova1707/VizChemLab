@@ -137,28 +137,67 @@ const Visualizer = () => {
   }, []);
 
   const fetchHistory = async () => {
+    console.log('Fetching history, user:', !!user);
     try {
-      const resp = await fetch('/api/visualize/history');
-      if (resp.ok) {
-        const data = await resp.json();
-        setHistory(data);
+      // Загружаем историю только для авторизованных пользователей
+      if (user) {
+        const resp = await fetch('/api/visualize/history');
+        if (resp.ok) {
+          const data = await resp.json();
+          console.log('Server history:', data);
+          setHistory(data);
+        } else {
+          console.error('Failed to fetch server history');
+          setHistory([]);
+        }
+      } else {
+        // Для неавторизованных пользователей история не загружается
+        setHistory([]);
       }
     } catch (e) {
       console.error('Failed to fetch history:', e);
+      setHistory([]);
     }
   };
 
   const handleDeleteHistory = async (query) => {
     try {
-      const resp = await fetch(`/api/visualize/history/${encodeURIComponent(query)}`, {
-        method: 'DELETE'
-      });
-      if (resp.ok) {
-        fetchHistory();
-        setDeleteConfirm(null);
+      // Сначала пробуем удалить с сервера для авторизованных пользователей
+      if (user) {
+        const resp = await fetch(`/api/visualize/history/${encodeURIComponent(query)}`, {
+          method: 'DELETE'
+        });
+        if (resp.ok) {
+          fetchHistory();
+          setDeleteConfirm(null);
+          return;
+        }
       }
+      
+      // Если пользователь не авторизован или сервер недоступен, удаляем из localStorage
+      const localHistory = localStorage.getItem('visualizer_local_history');
+      if (localHistory) {
+        const parsed = JSON.parse(localHistory);
+        const filtered = parsed.filter(item => item.query !== query);
+        localStorage.setItem('visualizer_local_history', JSON.stringify(filtered));
+        setHistory(filtered);
+      }
+      setDeleteConfirm(null);
     } catch (e) {
       console.error('Failed to delete history item:', e);
+      // Fallback to localStorage
+      try {
+        const localHistory = localStorage.getItem('visualizer_local_history');
+        if (localHistory) {
+          const parsed = JSON.parse(localHistory);
+          const filtered = parsed.filter(item => item.query !== query);
+          localStorage.setItem('visualizer_local_history', JSON.stringify(filtered));
+          setHistory(filtered);
+        }
+        setDeleteConfirm(null);
+      } catch (localError) {
+        console.error('Failed to delete local history item:', localError);
+      }
     }
   };
 
@@ -191,7 +230,29 @@ const Visualizer = () => {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Ошибка API');
-      fetchHistory();
+      
+      // Сохраняем историю только для авторизованных пользователей
+      if (user) {
+        // Добавляем новый запрос в историю (если его еще нет)
+        const existingIndex = history.findIndex(item => item.query === query);
+        if (existingIndex !== -1) {
+          // Перемещаем существующий элемент в начало
+          const newHistory = [...history];
+          newHistory.splice(existingIndex, 1);
+          newHistory.unshift({
+            query: query,
+            timestamp: new Date().toISOString()
+          });
+          setHistory(newHistory);
+        } else {
+          // Добавляем новый элемент в начало
+          const newHistory = [{
+            query: query,
+            timestamp: new Date().toISOString()
+          }, ...history];
+          setHistory(newHistory);
+        }
+      }
       
       if (data.isomers && data.isomers.length > 0) {
         setIsomers(data.isomers);
@@ -345,6 +406,7 @@ const Visualizer = () => {
           Исследуйте структуру органических и неорганических соединений
         </p>
 
+        
         <form onSubmit={handleSubmit}
           className="visualizer-form"
           style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, maxWidth: '600px', margin: '0 auto 32px auto', flexWrap: 'wrap' }}>
@@ -375,6 +437,79 @@ const Visualizer = () => {
             {loading ? 'Загрузка...' : 'Показать 3D'}
           </button>
         </form>
+
+        {/* История поиска внизу между формой и канвасом */}
+        {user && history.length > 0 && (
+          <div style={{ 
+            maxWidth: '600px', 
+            margin: '0 auto 24px auto',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '16px'
+          }}>
+            <h3 style={{ 
+              margin: '0 0 12px 0', 
+              color: 'var(--text-main)',
+              fontSize: '14px',
+              fontWeight: '600',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}>
+              Последние запросы
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {history.slice(0, 5).map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setMolecule(item.query);
+                    // Только меняем текст, не запускаем поиск
+                  }}
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '16px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--primary)';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-secondary)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  {item.query}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(item.query);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'inherit',
+                      cursor: 'pointer',
+                      padding: '0',
+                      marginLeft: '4px'
+                    }}
+                  >
+                    ×
+                  </button>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && <div className="error-message" style={{ textAlign: 'center' }}>{error}</div>}
         

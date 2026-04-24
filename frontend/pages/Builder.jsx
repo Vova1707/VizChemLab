@@ -133,6 +133,7 @@ const Builder = () => {
   const [draggedAtomId, setDraggedAtomId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isSplitView, setIsSplitView] = useState(false);
+  const [autoSearchEnabled, setAutoSearchEnabled] = useState(true); // Новая опция
   
   const filteredElements = useMemo(() => {
     if (!periodicTable) return [];
@@ -578,11 +579,88 @@ const Builder = () => {
     }
   };
 
-  const handleFinish = async () => {
+  // Автоматический поиск в базе данных при изменении фрагментов
+  useEffect(() => {
+    if (!autoSearchEnabled) return;
+    
+    const timer = setTimeout(() => {
+      if (detectedFragments.length > 0 && activeTab === '2D' && !isSearching) {
+        console.log('Auto-triggering database search for fragments');
+        // Только ищем информацию, не переключаем вкладку
+        searchMoleculeInfo();
+      }
+    }, 2000); // Задержка 2 секунды после последнего изменения
+    
+    return () => clearTimeout(timer);
+  }, [detectedFragments.length, atoms.length, bonds.length, autoSearchEnabled, isSearching]);
+
+  const searchMoleculeInfo = async () => {
     if (atoms.length === 0) return;
     
-    // Сначала показываем 3D вид конструктора (симулятор)
-    setActiveTab('3D');
+    setIsSearching(true);
+
+    try {
+      const fragments = detectedFragments;
+      console.log(`Searching info for ${fragments.length} molecules:`, fragments.map(getFormula).join(', '));
+
+      // Ищем данные для каждого фрагмента параллельно
+      const searchPromises = fragments.map(async (fragment) => {
+        const formula = getFormula(fragment);
+        
+        try {
+          // Ищем информацию о молекуле
+          const res = await fetch('/api/visualize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ formula })
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            console.log(`Found info for ${formula}:`, data);
+            return { 
+              formula: formula,
+              info: data,
+              source: 'PubChem',
+              fragment: fragment
+            };
+          } else {
+            console.warn(`Info search failed for ${formula}: ${res.status}`);
+          }
+        } catch (e) {
+          console.error(`Error searching info for ${formula}:`, e);
+        }
+        
+        // Если не нашли информацию, возвращаем базовую
+        return { 
+          formula: formula,
+          info: { compound: formula, source: 'Generated', format: 'text', data: 'No additional info available' },
+          source: 'Generated',
+          fragment: fragment
+        };
+      });
+
+      const results = await Promise.all(searchPromises);
+      
+      setFetchedSdf(JSON.stringify(results));
+      
+      saveSession({ 
+        fetchedSdf: JSON.stringify(results),
+        last_search_results: results.map(r => ({ formula: r.formula, source: r.source }))
+      });
+      
+      console.log(`Info search completed. Found info for ${results.length} fragments`);
+      
+    } catch (error) {
+      console.error('Info search process failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleFinish = async () => {
+    // Переключаемся на вкладку информации
+    setActiveTab('Info');
     setFetchedSdf(null);
     setIsSearching(true);
 
@@ -593,11 +671,10 @@ const Builder = () => {
       // Ищем данные для каждого фрагмента параллельно
       const searchPromises = fragments.map(async (fragment) => {
         const formula = getFormula(fragment);
-        const centerX = fragment.reduce((sum, a) => sum + a.x, 0) / fragment.length;
-        const centerY = fragment.reduce((sum, a) => sum + a.y, 0) / fragment.length;
         
         try {
-          const res = await fetch('/api/lookup-formula', {
+          // Ищем информацию о молекуле
+          const res = await fetch('/api/visualize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ formula })
@@ -605,68 +682,42 @@ const Builder = () => {
           
           if (res.ok) {
             const data = await res.json();
-            // Если API вернул массив (несколько изомеров), берем первый или обрабатываем все
-            if (data) {
-              const sdfData = data.sdf || (Array.isArray(data) ? data[0]?.sdf : null);
-              if (sdfData) {
-                console.log(`Found DB result for ${formula}`);
-                return { 
-                  sdf: sdfData, 
-                  formula: data.formula || formula, 
-                  cid: data.cid || (Array.isArray(data) ? data[0]?.cid : null),
-                  source: 'DB',
-                  centerX, 
-                  centerY 
-                };
-              }
-            }
+            console.log(`Found info for ${formula}:`, data);
+            return { 
+              formula: formula,
+              info: data,
+              source: 'PubChem',
+              fragment: fragment
+            };
+          } else {
+            console.warn(`Info search failed for ${formula}: ${res.status}`);
           }
         } catch (e) {
-          console.error(`Error searching for ${formula}:`, e);
+          console.error(`Error searching info for ${formula}:`, e);
         }
         
-        // Если не нашли в базе, генерируем свой SDF для этого фрагмента
-        console.log(`Falling back to generated SDF for ${formula}`);
-        const fragmentBonds = bonds.filter(b => 
-          fragment.some(a => a.id === b.source) && 
-          fragment.some(a => a.id === b.target)
-        );
-        const generatedSdf = generateSDF(true, fragment, fragmentBonds);
+        // Если не нашли информацию, возвращаем базовую
         return { 
-          sdf: generatedSdf, 
-          centerX, 
-          centerY, 
-          formula, 
-          source: 'Simulator',
-          fallbackAtoms: fragment,
-          fallbackBonds: fragmentBonds
+          formula: formula,
+          info: { compound: formula, source: 'Generated', format: 'text', data: 'No additional info available' },
+          source: 'Generated',
+          fragment: fragment
         };
       });
 
       const results = await Promise.all(searchPromises);
       
-      // Убеждаемся, что каждый результат — это отдельный объект
-      const finalResults = results.filter(Boolean);
-      const finalSdfJson = JSON.stringify(finalResults);
-      
-      setFetchedSdf(finalSdfJson);
-      // Автоматически выбираем первую молекулу, если результаты есть
-      if (finalResults.length > 0) {
-        setSelectedResultIndex(0);
-      }
+      setFetchedSdf(JSON.stringify(results));
       
       saveSession({ 
-        fetchedSdf: finalSdfJson,
-        selectedResultIndex: finalResults.length > 0 ? 0 : null,
-        last_search_results: finalResults.map(r => ({ formula: r.formula, source: r.source }))
+        fetchedSdf: JSON.stringify(results),
+        last_search_results: results.map(r => ({ formula: r.formula, source: r.source }))
       });
       
-      // Всегда переключаемся на DB
-      setActiveTab('DB');
-      console.log("Results prepared, switched to DB tab. Count:", finalResults.length);
+      console.log(`Info search completed. Found info for ${results.length} fragments`);
       
     } catch (error) {
-      console.error('Search process failed:', error);
+      console.error('Info search process failed:', error);
     } finally {
       setIsSearching(false);
     }
@@ -972,20 +1023,19 @@ const Builder = () => {
                   position: 'absolute',
                   top: '6px',
                   bottom: '6px',
-                  left: activeTab === '2D' ? '6px' : activeTab === '3D' ? 'calc(33.33% + 2px)' : 'calc(66.66% + 2px)',
-                  width: 'calc(33.33% - 8px)',
-                  background: activeTab === 'DB' 
+                  left: activeTab === '2D' ? '6px' : 'calc(50% + 2px)',
+                  width: 'calc(50% - 8px)',
+                  background: activeTab === 'Info' 
                     ? 'linear-gradient(135deg, #10b981, #059669)' 
-                    : (activeTab === '3D' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'linear-gradient(135deg, #3b82f6, #2563eb)'),
+                    : 'linear-gradient(135deg, #3b82f6, #2563eb)',
                   borderRadius: '18px',
                   transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                  zIndex: 0,
-                  boxShadow: activeTab === 'DB' 
+                  boxShadow: activeTab === 'Info' 
                     ? '0 8px 25px rgba(16, 185, 129, 0.5)' 
-                    : (activeTab === '3D' ? '0 8px 25px rgba(99, 102, 241, 0.5)' : '0 8px 25px rgba(59, 130, 246, 0.5)')
+                    : '0 8px 25px rgba(59, 130, 246, 0.5)'
                 }} />
                 
-                {['2D', '3D', 'DB'].map((tab) => (
+                {['2D', 'Info'].map((tab) => (
                   <button 
                     key={tab}
                     onClick={() => {
@@ -1005,8 +1055,8 @@ const Builder = () => {
                       color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
                       fontWeight: '800',
                       fontSize: '0.85rem',
-                      cursor: (tab === 'DB' && !fetchedSdf) ? 'not-allowed' : 'pointer',
-                      opacity: (tab === 'DB' && !fetchedSdf) ? 0.3 : 1,
+                      cursor: (tab === 'Info' && !fetchedSdf) ? 'not-allowed' : 'pointer',
+                      opacity: (tab === 'Info' && !fetchedSdf) ? 0.3 : 1,
                       transition: 'all 0.3s ease',
                       display: 'flex',
                       flexDirection: 'column',
@@ -1020,8 +1070,7 @@ const Builder = () => {
                     }}
                   >
                     {tab === '2D' && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>}
-                    {tab === '3D' && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>}
-                    {tab === 'DB' && (
+                    {tab === 'Info' && (
                       isSearching ? (
                         <div className="spinner-border spinner-border-sm" role="status" style={{ width: '16px', height: '16px', border: '2.5px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                       ) : (
@@ -1029,10 +1078,42 @@ const Builder = () => {
                       )
                     )}
                     <span style={{ fontSize: '0.7rem' }}>
-                      {tab === '2D' ? 'Схема' : tab === '3D' ? '3D Вид' : (isSearching ? 'Поиск...' : 'База')}
+                      {tab === '2D' ? 'Схема' : (isSearching ? 'Поиск...' : 'Информация')}
                     </span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Управляющие элементы для автоматического поиска */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <label style={{ 
+                  fontSize: '0.85rem', 
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={autoSearchEnabled}
+                    onChange={(e) => setAutoSearchEnabled(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  Автоматический поиск в базе
+                </label>
+                {detectedFragments.length > 0 && (
+                  <span style={{ 
+                    fontSize: '0.75rem', 
+                    color: 'var(--text-muted)',
+                    background: 'var(--bg-secondary)',
+                    padding: '2px 8px',
+                    borderRadius: '12px'
+                  }}>
+                    {detectedFragments.length} фрагмент{detectedFragments.length !== 1 ? 'а' : ''} обнаружено
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1088,8 +1169,8 @@ const Builder = () => {
                         <rect 
                           x={minX - 25} y={minY - 25} 
                           width={maxX - minX + 50} height={maxY - minY + 50} 
-                          fill="rgba(99, 102, 241, 0.03)" 
-                          stroke="rgba(99, 102, 241, 0.1)" 
+                          fill="rgba(99, 102, 241, 0.05)" 
+                          stroke="rgba(99, 102, 241, 0.2)" 
                           strokeDasharray="4,4"
                           rx="15"
                           pointerEvents="none"
@@ -1097,12 +1178,12 @@ const Builder = () => {
                         <text 
                           x={minX} y={minY - 30} 
                           fill="var(--text-secondary)" 
-                          fontSize="10" 
+                          fontSize="12" 
                           fontWeight="600"
                         >
-                          Molecule {idx + 1}: {formula}
+                          {formula}
                         </text>
-                      </g>
+                                              </g>
                     );
                   })}
 
@@ -1248,7 +1329,7 @@ const Builder = () => {
                         >
                           {atom.element}
                         </text>
-                      </g>
+                                              </g>
                     );
                   })}
                 </svg>
@@ -1283,7 +1364,7 @@ const Builder = () => {
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                  Визуализировать
+                  Найти
                 </button>
                 <button 
                   className="btn btn-secondary" 
@@ -1306,250 +1387,209 @@ const Builder = () => {
               <div style={{ 
                 flex: (activeTab !== '2D' || isSplitView) ? 1 : 0,
                 display: (activeTab !== '2D' || isSplitView) ? 'flex' : 'none',
-                flexDirection: 'row', // Изменяем на row для сайдбара
+                flexDirection: 'row',
                 height: '100%',
                 position: 'relative',
                 transition: 'flex 0.3s ease'
               }}>
-                {activeTab === 'DB' && fetchedSdf && (
-                  <div style={{
-                    width: '240px',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    borderRight: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '16px',
-                    gap: '12px',
-                    overflowY: 'auto',
-                    zIndex: 20
-                  }}>
-                    <h4 style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                      Результаты поиска
-                    </h4>
-                    {(() => {
-                      try {
-                        let results = [];
-                        if (typeof fetchedSdf === 'string') {
-                          try {
-                            const parsed = JSON.parse(fetchedSdf);
-                            results = Array.isArray(parsed) ? parsed : [parsed];
-                          } catch (e) {
-                            if (fetchedSdf.includes('$$$$')) {
-                              results = fetchedSdf.split('$$$$').filter(s => s.trim().length > 10).map(s => ({ formula: 'Molecule', source: 'DB' }));
-                            } else {
-                              results = [{ formula: 'Molecule', source: 'DB' }];
+                {activeTab === 'Info' && fetchedSdf && (
+                  <>
+                    {/* Боковая панель со списком молекул */}
+                    <div style={{
+                      width: '240px',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      borderRight: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '16px',
+                      gap: '12px',
+                      overflowY: 'auto',
+                      zIndex: 20
+                    }}>
+                      <h4 style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                        Найденные молекулы
+                      </h4>
+                      {(() => {
+                        try {
+                          let results = [];
+                          if (typeof fetchedSdf === 'string') {
+                            try {
+                              const parsed = JSON.parse(fetchedSdf);
+                              results = Array.isArray(parsed) ? parsed : [parsed];
+                            } catch (e) {
+                              results = [{ formula: 'Molecule', source: 'Generated' }];
                             }
+                          } else {
+                            results = Array.isArray(fetchedSdf) ? fetchedSdf : [fetchedSdf];
                           }
-                        } else {
-                          results = Array.isArray(fetchedSdf) ? fetchedSdf : [fetchedSdf];
-                        }
-                        
-                        return results.map((res, idx) => (
-                          <div 
-                            key={idx} 
-                            onClick={() => {
-                              // Переключаем выбор конкретной молекулы
-                              setSelectedResultIndex(selectedResultIndex === idx ? null : idx);
-                            }}
-                            style={{
-                              padding: '12px',
-                              background: selectedResultIndex === idx ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)',
-                              borderRadius: '12px',
-                              border: selectedResultIndex === idx ? '1px solid var(--primary)' : '1px solid var(--border)',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '6px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease',
-                              position: 'relative',
-                              overflow: 'hidden',
-                              boxShadow: selectedResultIndex === idx ? '0 0 15px rgba(99, 102, 241, 0.3)' : 'none'
-                            }}
-                            onMouseOver={(e) => {
-                              if (selectedResultIndex !== idx) {
-                                e.currentTarget.style.background = 'var(--border)';
-                                e.currentTarget.style.borderColor = 'var(--text-secondary)';
-                              }
-                            }}
-                            onMouseOut={(e) => {
-                              if (selectedResultIndex !== idx) {
-                                e.currentTarget.style.background = 'var(--bg-secondary)';
-                                e.currentTarget.style.borderColor = 'var(--border)';
-                              }
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>{res.formula || 'Molecule'}</span>
-                              <span style={{ 
-                                fontSize: '0.6rem', 
-                                padding: '2px 6px', 
-                                background: res.source === 'DB' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(99, 102, 241, 0.2)',
-                                color: res.source === 'DB' ? '#10b981' : '#818cf8',
-                                borderRadius: '4px',
-                                textTransform: 'uppercase',
-                                fontWeight: '700'
+                          
+                          return results.map((res, idx) => (
+                            <div 
+                              key={idx} 
+                              onClick={() => setSelectedResultIndex(idx)}
+                              style={{
+                                padding: '12px',
+                                background: selectedResultIndex === idx ? 'var(--primary)' : 'var(--bg-card)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <div style={{ 
+                                fontSize: '0.75rem', 
+                                fontWeight: '600', 
+                                color: selectedResultIndex === idx ? 'white' : 'var(--text-main)' 
+                              }}>
+                                {res.formula}
+                              </div>
+                              <div style={{ 
+                                fontSize: '0.65rem', 
+                                color: selectedResultIndex === idx ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)',
+                                marginTop: '4px' 
                               }}>
                                 {res.source}
-                              </span>
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                              {res.cid && (
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>PubChem CID: {res.cid}</span>
-                              )}
-                              <span style={{ 
-                                fontSize: '0.65rem', 
-                                color: selectedResultIndex === idx ? 'var(--primary)' : 'var(--text-secondary)', 
-                                fontWeight: '600', 
-                                marginTop: '4px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '4px' 
+                          ));
+                        } catch (e) {
+                          return <div style={{ color: 'var(--error)', fontSize: '0.8rem' }}>Ошибка загрузки</div>;
+                        }
+                      })()}
+                    </div>
+                    
+                    {/* Основная панель с информацией */}
+                    <div style={{ 
+                      flex: 1, 
+                      padding: '24px',
+                      overflowY: 'auto'
+                    }}>
+                      {(() => {
+                        try {
+                          let results = [];
+                          if (typeof fetchedSdf === 'string') {
+                            const parsed = JSON.parse(fetchedSdf);
+                            results = Array.isArray(parsed) ? parsed : [parsed];
+                          } else {
+                            results = Array.isArray(fetchedSdf) ? fetchedSdf : [fetchedSdf];
+                          }
+                          
+                          const currentResult = results[selectedResultIndex] || results[0];
+                          if (!currentResult) return <div>Нет данных</div>;
+                          
+                          return (
+                            <div style={{ color: 'var(--text-main)' }}>
+                              <h2 style={{ margin: '0 0 16px 0', fontSize: '1.5rem', fontWeight: '700' }}>
+                                {currentResult.formula}
+                              </h2>
+                              
+                              <div style={{ 
+                                background: 'var(--bg-card)', 
+                                padding: '16px', 
+                                borderRadius: '12px', 
+                                marginBottom: '16px',
+                                border: '1px solid var(--border)'
                               }}>
-                                {selectedResultIndex === idx ? (
-                                  <>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    Показать все
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                    Фокус
-                                  </>
-                                )}
-                              </span>
+                                <h3 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                  Источник данных
+                                </h3>
+                                <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                                  {currentResult.source === 'PubChem' ? 'PubChem Database' : 'Сгенерировано автоматически'}
+                                </p>
+                              </div>
+                              
+                              {currentResult.info && (
+                                <div style={{ 
+                                  background: 'var(--bg-card)', 
+                                  padding: '16px', 
+                                  borderRadius: '12px', 
+                                  marginBottom: '16px',
+                                  border: '1px solid var(--border)'
+                                }}>
+                                  <h3 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    Информация о соединении
+                                  </h3>
+                                  {currentResult.info.compound && (
+                                    <p style={{ margin: '0 0 8px 0' }}>
+                                      <strong>Соединение:</strong> {currentResult.info.compound}
+                                    </p>
+                                  )}
+                                  {currentResult.info.info && currentResult.info.info.cid && (
+                                    <p style={{ margin: '0 0 8px 0' }}>
+                                      <strong>CID:</strong> {currentResult.info.info.cid}
+                                    </p>
+                                  )}
+                                  {currentResult.info.info && currentResult.info.info.molecular_weight && (
+                                    <p style={{ margin: '0 0 8px 0' }}>
+                                      <strong>Молярная масса:</strong> {currentResult.info.info.molecular_weight} г/моль
+                                    </p>
+                                  )}
+                                  {currentResult.info.info && currentResult.info.info.molecular_formula && (
+                                    <p style={{ margin: '0 0 8px 0' }}>
+                                      <strong>Молекулярная формула:</strong> {currentResult.info.info.molecular_formula}
+                                    </p>
+                                  )}
+                                  {currentResult.info.info && currentResult.info.info.iupac_name && (
+                                    <p style={{ margin: '0 0 8px 0' }}>
+                                      <strong>IUPAC название:</strong> {currentResult.info.info.iupac_name}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {currentResult.fragment && (
+                                <div style={{ 
+                                  background: 'var(--bg-card)', 
+                                  padding: '16px', 
+                                  borderRadius: '12px', 
+                                  border: '1px solid var(--border)'
+                                }}>
+                                  <h3 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    Структура в конструкторе
+                                  </h3>
+                                  <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem' }}>
+                                    <strong>Количество атомов:</strong> {currentResult.fragment.length}
+                                  </p>
+                                  <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                                    <strong>Элементы:</strong> {currentResult.fragment.map(a => a.element).join(', ')}
+                                  </p>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ));
-                      } catch (e) {
-                        return <div style={{ color: 'var(--error)', fontSize: '0.8rem' }}>Ошибка отображения списка</div>;
-                      }
-                    })()}
+                          );
+                        } catch (e) {
+                          return <div style={{ color: 'var(--error)' }}>Ошибка загрузки информации</div>;
+                        }
+                      })()}
+                    </div>
+                  </>
+                )}
+                
+                {activeTab === 'Info' && !fetchedSdf && (
+                  <div style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: 'var(--text-secondary)',
+                    fontSize: '1.1rem'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px auto', opacity: 0.3 }}>
+                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                      </svg>
+                      <p>Создайте молекулы и нажмите "Найти в базе"</p>
+                      <p style={{ fontSize: '0.9rem', marginTop: '8px', opacity: 0.7 }}>или включите автоматический поиск</p>
+                    </div>
                   </div>
                 )}
-
-                <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                  <div ref={viewerRef} style={{ 
-                    flex: 1,
-                    width: '100%', 
-                    height: '100%',
-                    borderRadius: isSplitView ? '0' : '24px',
-                    overflow: 'hidden'
-                  }} />
-                  
-                  <div style={{
-                    position: 'absolute',
-                    top: '16px',
-                    left: '16px',
-                    zIndex: 10,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                  }}>
-                    {activeTab === 'DB' && fetchedSdf && (
-                      <div style={{
-                        padding: '6px 12px',
-                        background: 'rgba(16, 185, 129, 0.9)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        backdropFilter: 'blur(4px)'
-                      }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17L4 12"/></svg>
-                        Результаты из БД
-                      </div>
-                    )}
-                    
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        let sdfToCopy = "";
-                        if (activeTab === 'DB' && fetchedSdf) {
-                          try {
-                            // Пробуем распарсить как наш массив результатов
-                            const results = JSON.parse(fetchedSdf);
-                            if (Array.isArray(results)) {
-                              sdfToCopy = results.map(res => res.sdf).filter(Boolean).join('\n$$$$\n');
-                            } else if (results && results.sdf) {
-                              sdfToCopy = results.sdf;
-                            } else {
-                              sdfToCopy = fetchedSdf;
-                            }
-                          } catch (e) {
-                            // Если не JSON, возможно это уже составной SDF или одиночный
-                            sdfToCopy = fetchedSdf;
-                          }
-                        } else {
-                          // Для вкладки 2D/3D генерируем общий SDF из всех фрагментов
-                          const allFragmentsSdf = detectedFragments.map(fragment => {
-                            const fragmentBonds = bonds.filter(b => 
-                              fragment.some(a => a.id === b.source) && 
-                              fragment.some(a => a.id === b.target)
-                            );
-                            return generateSDF(true, fragment, fragmentBonds);
-                          }).filter(Boolean).join('\n$$$$\n');
-                          
-                          sdfToCopy = allFragmentsSdf || generateSDF(true);
-                        }
-                        
-                        if (sdfToCopy) {
-                          navigator.clipboard.writeText(sdfToCopy);
-                          alert('SDF код скопирован в буфер обмена');
-                        } else {
-                          alert('Нет данных для копирования');
-                        }
-                      }}
-                      style={{
-                        padding: '8px 12px',
-                        background: 'rgba(30, 41, 59, 0.7)',
-                        color: '#fff',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '8px',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        backdropFilter: 'blur(4px)',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                      SDF
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
-        </div>
-        
-        {/* Main Canvas Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Mobile Search Panel */}
-          <div className="search-panel mobile-only" style={{ 
-            display: 'none', 
-            background: 'var(--bg-card)', 
-            borderRadius: 'var(--radius)', 
-            padding: '16px', 
-            marginBottom: '16px' 
-          }}>
-            <input 
-              type="text" 
-              placeholder="Поиск элемента..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-              style={{ width: '100%' }}
-            />
           </div>
-          
-          {/* Canvas content goes here */}
         </div>
       </div>
-    </div>
   );
 };
 
