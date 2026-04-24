@@ -342,10 +342,7 @@ const Simulator = () => {
     setError('');
     
     // Очищаем вьювер при новом поиске
-    if (viewerRef.current) {
-      viewerRef.current.innerHTML = '';
-      v3dRef.current = null;
-    }
+    cleanupViewer();
 
     // Сбрасываем сохраненные состояния камер
     viewStatesRef.current = { reactants: null, products: null, morph: null };
@@ -354,15 +351,29 @@ const Simulator = () => {
     const queryToUse = queryOverride || reactants;
 
     try {
+      const trimmedQuery = (queryToUse || '').trim();
+      
+      if (!trimmedQuery) {
+        throw new Error('Пожалуйста, введите химическую формулу для симуляции');
+      }
+      
+      const requestBody = JSON.stringify(trimmedQuery);
+      
       const res = await fetch('/api/simulate-visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify((queryToUse || '').trim())
+        body: requestBody
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail || data?.error || 'Не удалось выполнить симуляцию. Сервер не отвечает.');
+        let errorMessage = 'Не удалось выполнить симуляцию. Сервер не отвечает.';
+        if (data?.detail) {
+          errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        } else if (data?.error) {
+          errorMessage = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        }
+        throw new Error(errorMessage);
       }
 
       if (data.raw_equation === 'NO_REACTION') {
@@ -399,8 +410,22 @@ const Simulator = () => {
     }
   };
 
+  const cleanupViewer = () => {
+    if (v3dRef.current) {
+      try {
+        v3dRef.current.clear();
+        v3dRef.current = null;
+      } catch (e) {
+        console.warn('Error during viewer cleanup:', e);
+      }
+    }
+    if (viewerRef.current) {
+      viewerRef.current.innerHTML = '';
+    }
+  };
+
   useEffect(() => {
-    // Force viewer cleanup when leaving 3d tab to ensure proper re-initialization
+    // Simple cleanup when leaving 3d tab
     if (activeTab !== '3d') {
       v3dRef.current = null;
     }
@@ -414,8 +439,7 @@ const Simulator = () => {
       const list = frames.length ? frames : lastFramesRef.current;
       if (!list.length || !viewerRef.current) return;
 
-      // Если вьювер был очищен (v3dRef.current === null), нужно дождаться следующего цикла отрисовки
-      // или пересоздать его. Но лучше просто пропустить один кадр.
+      // Simple viewer initialization like the working version
       if (!v3dRef.current && viewerRef.current.innerHTML === '') {
           try {
               await load3Dmol();
@@ -424,11 +448,7 @@ const Simulator = () => {
               return;
           }
           if (!viewerRef.current) return;
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
-            backgroundColor: '#000000',
-            antialias: true,
-            backgroundOpacity: 1.0
-          });
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' });
       }
 
       let currentFrame;
@@ -452,25 +472,16 @@ const Simulator = () => {
       
       // Определяем цвет фона и связей в зависимости от темы
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const bgColor = isDark ? '#0f172a' : '#f8faff'; // Адаптивный фон: темный для темной темы, светлый для светлой
+      const bgColor = isDark ? '#0f172a' : '#f8faff';
 
-      // Инициализируем viewer только если его еще нет
+      // Simple viewer initialization like the working version
       if (!v3dRef.current) {
         try {
-          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
-            backgroundColor: '#000000',
-            antialias: true,
-            backgroundOpacity: 1.0
-          }, null, true);
+          v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000' }, null, true);
         } catch (err) {
           console.error('createViewer (noWebGL) error:', err);
           try {
-            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { 
-              backgroundColor: '#000000', 
-              viewerType: 'canvas',
-              antialias: true,
-              backgroundOpacity: 1.0
-            }, null, true);
+            v3dRef.current = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: '#000000', viewerType: 'canvas' }, null, true);
           } catch (err2) {
             console.error('createViewer (viewerType canvas) error:', err2);
           }
@@ -482,18 +493,6 @@ const Simulator = () => {
         console.error('Не удалось создать или получить viewer');
         return;
       }
-
-      // Принудительно устанавливаем размеры canvas после создания viewer
-      setTimeout(() => {
-        const canvas = viewerRef.current?.querySelector('canvas');
-        if (canvas) {
-          canvas.style.width = '100%';
-          canvas.style.height = '100%';
-          canvas.style.maxWidth = '100%';
-          canvas.style.maxHeight = '100%';
-          canvas.style.overflow = 'hidden';
-        }
-      }, 10);
 
       // Обновляем фон при каждой отрисовке кадра на случай смены темы
       viewer.setBackgroundColor(bgColor);
@@ -619,23 +618,17 @@ const Simulator = () => {
         }
       }
 
-      // Восстанавливаем камеру
+      // Восстанавливаем камеру - простая логика как в рабочей версии
       if (isNewSimRef.current) {
-        viewer.resize(); // Force resize to ensure correct aspect ratio
-        
         // Manual centering based on calculated bounds
         if (isFinite(minX) && isFinite(maxX)) {
             const cx = (minX + maxX) / 2;
             const cy = (minY + maxY) / 2;
             const cz = (minZ + maxZ) / 2;
             viewer.center({x: cx, y: cy, z: cz});
-            
-            // Add slight zoom out for better visibility
-            const zoomFactor = 1.2;
-            viewer.zoom(zoomFactor);
-        } else {
-            viewer.zoomTo();
         }
+        
+        viewer.zoomTo();
         isNewSimRef.current = false;
       } else {
         const savedView = viewStatesRef.current[viewMode];
@@ -649,6 +642,7 @@ const Simulator = () => {
       // Обновляем ссылку на текущий режим для следующего цикла
       prevViewModeRef.current = viewMode;
 
+      // Простой рендеринг без задержек
       viewer.render();
       viewer.resize();
     };
