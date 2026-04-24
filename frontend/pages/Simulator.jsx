@@ -357,7 +357,7 @@ const Simulator = () => {
       const res = await fetch('/api/simulate-visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(queryToUse.trim())
+        body: (queryToUse || '').trim()
       });
 
       const data = await res.json().catch(() => ({}));

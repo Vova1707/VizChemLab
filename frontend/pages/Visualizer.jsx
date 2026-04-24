@@ -187,7 +187,7 @@ const Visualizer = () => {
       const resp = await fetch('/api/visualize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formula: query.trim() }),
+        body: JSON.stringify({ formula: (query || '').trim() }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Ошибка API');
