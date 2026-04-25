@@ -134,47 +134,31 @@ const Visualizer = () => {
   // Загружаем историю при монтировании
   useEffect(() => {
     fetchHistory();
-  }, [user]);
+  }, []);
 
   const fetchHistory = async () => {
-    console.log("=== FETCHING HISTORY ===");
-    console.log("User object:", user);
-    console.log("User exists:", !!user);
     try {
-      if (user) {
-        const response = await fetch("/api/visualizer/history");
-        console.log("History response status:", response.status);
-        if (response.ok) {
-          const data = await response.json();
-          console.log("Server history data:", data);
-          setHistory(data);
-        } else {
-          console.error("Failed to fetch server history, status:", response.status);
-          setHistory([]);
-        }
-      } else {
-        console.log("No user - setting empty history");
-        setHistory([]);
+      const resp = await fetch('/api/visualize/history');
+      if (resp.ok) {
+        const data = await resp.json();
+        setHistory(data);
       }
-    } catch (err) {
-      console.error("Failed to fetch history:", err);
-      setHistory([]);
+    } catch (e) {
+      console.error('Failed to fetch history:', e);
     }
-    console.log("Final history state:", history);
   };
 
   const handleDeleteHistory = async (query) => {
     try {
-      if (user) {
-        await fetch(`/api/visualizer/history/${encodeURIComponent(query)}`, {
-          method: 'DELETE'
-        });
-        await fetchHistory();
+      const resp = await fetch(`/api/visualize/history/${encodeURIComponent(query)}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        fetchHistory();
+        setDeleteConfirm(null);
       }
-    } catch (err) {
-      console.error("Failed to delete history item:", err);
-    } finally {
-      setDeleteConfirm(null);
+    } catch (e) {
+      console.error('Failed to delete history item:', e);
     }
   };
 
@@ -207,11 +191,7 @@ const Visualizer = () => {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Ошибка API');
-      
-      // Обновляем историю после успешного запроса
-      if (user) {
-        fetchHistory();
-      }
+      fetchHistory();
       
       if (data.isomers && data.isomers.length > 0) {
         setIsomers(data.isomers);
@@ -258,20 +238,12 @@ const Visualizer = () => {
   };
 
   const show3DMol = async (sdf) => {
-    console.log('=== show3DMol called ===');
-    console.log('SDF data type:', typeof sdf);
-    console.log('SDF data length:', sdf ? sdf.length : 'null');
-    console.log('SDF preview:', sdf ? sdf.substring(0, 100) + '...' : 'null');
-    
     await load3Dmol();
-    console.log('3Dmol loaded, window.$3Dmol:', !!window.$3Dmol);
     
     if (!viewerRef.current) {
       console.error('Viewer container not found');
       return;
     }
-    
-    console.log('Viewer container found, innerHTML length:', viewerRef.current.innerHTML.length);
     
     try {
       // Определяем цвет фона в зависимости от темы
@@ -282,22 +254,18 @@ const Visualizer = () => {
 
       // Инициализируем viewer, если его нет или контейнер пуст
       if (!viewer || viewerRef.current.innerHTML === '') {
-        console.log('Creating new viewer...');
         viewerRef.current.innerHTML = ''; // Очистка для гарантии
         try {
           viewer = window.$3Dmol.createViewer(viewerRef.current, { backgroundColor: bgColor });
           v3dRef.current = viewer;
-          console.log('Viewer created successfully:', !!viewer);
         } catch (e) {
           console.error('Error creating viewer:', e);
           throw new Error('Ошибка инициализации 3D viewer');
         }
       } else {
-        console.log('Using existing viewer');
         viewer.setBackgroundColor(bgColor);
       }
       
-      console.log('Clearing viewer...');
       viewer.clear();
       
       // Добавляем модель из SDF
@@ -307,9 +275,7 @@ const Visualizer = () => {
               throw new Error('Получены некорректные данные молекулы');
           }
           
-          console.log('Adding model to viewer...');
           viewer.addModel(sdf, 'sdf');
-          console.log('Model added successfully');
       } catch (e) {
           console.error('Error adding model:', e);
           if (e.name === 'InvalidCharacterError' || e.message.includes('match the expected pattern')) {
@@ -319,31 +285,12 @@ const Visualizer = () => {
       }
       
       // Устанавливаем стиль отображения
-      console.log('Setting style...');
       viewer.setStyle({}, { stick: { radius: 0.3, color: isDark ? '#f8f9fa' : '#4f46e5' }, sphere: { scale: 0.38 } });
       
       // Центрируем и рендерим
-      console.log('Zooming and rendering...');
       viewer.zoomTo();
       viewer.render();
       viewer.resize();
-      console.log('Render complete');
-      
-      // Проверяем созданные элементы
-      console.log('Viewer container children:', viewerRef.current.children.length);
-      console.log('Viewer container innerHTML:', viewerRef.current.innerHTML.substring(0, 200));
-      
-      // Проверяем canvas элементы
-      const canvases = viewerRef.current.querySelectorAll('canvas');
-      console.log('Canvas elements found:', canvases.length);
-      canvases.forEach((canvas, i) => {
-        console.log(`Canvas ${i}:`, {
-          width: canvas.width,
-          height: canvas.height,
-          style: canvas.style.cssText,
-          visible: canvas.offsetWidth > 0 && canvas.offsetHeight > 0
-        });
-      });
     } catch (err) {
       console.error('3Dmol render error:', err);
       setError(err.message);
@@ -377,92 +324,8 @@ const Visualizer = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '20px', maxWidth: '100%', width: '100%' }}>
-        {/* История запросов */}
-        {user && history.length > 0 && (
-          <div style={{ 
-            width: '280px', 
-            flexShrink: 0
-          }} className="history-sidebar">
-            <div className="glass-card" style={{ padding: '16px', height: 'fit-content' }}>
-              <h3 style={{ 
-                margin: '0 0 16px 0', 
-                color: 'var(--text-main)',
-                fontSize: '16px',
-                fontWeight: '600'
-              }}>
-                История запросов
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {history.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '12px',
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onClick={() => performSearch(item)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-card)';
-                    }}
-                  >
-                    <div style={{ 
-                      fontWeight: '500',
-                      color: 'var(--text-main)',
-                      marginBottom: '4px'
-                    }}>
-                      {item}
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: 'var(--text-secondary)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span>Нажмите чтобы повторить</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm(item);
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'var(--bg-danger)';
-                          e.currentTarget.style.color = 'white';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.color = 'var(--text-secondary)';
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Основной контент */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+      
+      <div style={{ maxWidth: '100%', width: '100%' }}>
         <h1 style={{
           fontSize: 32,
           fontWeight: 800,
@@ -515,72 +378,6 @@ const Visualizer = () => {
 
         {error && <div className="error-message" style={{ textAlign: 'center' }}>{error}</div>}
         
-        {/* История поиска внизу между формой и результатами */}
-        {user && history.length > 0 && (
-          <div style={{ 
-            marginTop: '24px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '16px'
-          }}>
-            <h3 style={{ 
-              margin: '0 0 12px 0', 
-              color: 'var(--text-main)',
-              fontSize: '14px',
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em'
-            }}>
-              Последние запросы
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {history.slice(0, 5).map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setMolecule(item);
-                    // Автоматически запускаем поиск
-                    setTimeout(() => {
-                      performSearch(item);
-                    }, 100);
-                  }}
-                  style={{
-                    background: 'var(--bg-main)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '20px',
-                    padding: '6px 12px',
-                    fontSize: '13px',
-                    color: 'var(--text-main)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--accent)';
-                    e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.borderColor = 'var(--accent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--bg-main)';
-                    e.currentTarget.style.color = 'var(--text-main)';
-                    e.currentTarget.style.borderColor = 'var(--border)';
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                    <path d="M3 3v5h5"/>
-                    <path d="M12 7v5l4 2"/>
-                  </svg>
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div
           ref={viewerRef}
           className="canvas-wrapper"
@@ -630,132 +427,7 @@ const Visualizer = () => {
             </div>
           </div>
         )}
-        </div>
       </div>
-
-      {/* Мобильная история */}
-      {user && history.length > 0 && (
-        <div style={{ 
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          zIndex: 1000
-        }}>
-          <button
-            onClick={() => setMobileHistoryOpen(!mobileHistoryOpen)}
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              border: 'none',
-              color: 'white',
-              fontSize: '20px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            📋
-          </button>
-          
-          {mobileHistoryOpen && (
-            <div style={{
-              position: 'absolute',
-              bottom: '70px',
-              right: '0',
-              width: '300px',
-              maxHeight: '400px',
-              overflowY: 'auto'
-            }}>
-              <div className="glass-card" style={{ padding: '16px' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '16px'
-                }}>
-                  <h3 style={{ 
-                    margin: 0, 
-                    color: 'var(--text-main)',
-                    fontSize: '16px',
-                    fontWeight: '600'
-                  }}>
-                    История
-                  </h3>
-                  <button
-                    onClick={() => setMobileHistoryOpen(false)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      fontSize: '20px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {history.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '12px',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onClick={() => {
-                        performSearch(item);
-                        setMobileHistoryOpen(false);
-                      }}
-                    >
-                      <div style={{ 
-                        fontWeight: '500',
-                        color: 'var(--text-main)',
-                        marginBottom: '4px'
-                      }}>
-                        {item}
-                      </div>
-                      <div style={{ 
-                        fontSize: '12px', 
-                        color: 'var(--text-secondary)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}>
-                        <span>Нажмите чтобы повторить</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirm(item);
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '12px'
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
